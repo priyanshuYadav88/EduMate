@@ -1,7 +1,7 @@
 import unittest
 from datetime import date, timedelta
 from app import create_app
-from models import db, User, Subject, Topic, Task, Exam, TimetableEntry
+from models import db, User, Subject, Topic, Task, Exam, TimetableEntry, RoadmapPlan, RoadmapItem, OfficialExamDirectory
 
 class EduMateTestCase(unittest.TestCase):
     def setUp(self):
@@ -47,6 +47,10 @@ class EduMateTestCase(unittest.TestCase):
             db.session.add(other_task)
 
             db.session.commit()
+            self.student_id = self.student.id
+            self.admin_id = self.admin.id
+            self.other_student_id = self.other_student.id
+            self.subject_id = sub.id
             self.task_id = task.id
             self.other_task_id = other_task.id
 
@@ -145,6 +149,148 @@ class EduMateTestCase(unittest.TestCase):
         self.assertNotIn(b'<aside class="sidebar">', register_page.data)
         self.assertNotIn(b'id="globalSearchInput"', register_page.data)
         self.assertIn(b'Create Student Account', register_page.data)
+
+    def test_roadmap_generation_success(self):
+        """Test generating a day-by-day roadmap with real topic distribution"""
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+        future_date = (date.today() + timedelta(days=14)).isoformat()
+
+        with self.app.app_context():
+            sub = Subject.query.filter_by(user_id=self.student_id).first()
+            sub_id = sub.id
+
+        response = self.client.post('/roadmap/generate', data={
+            'subject_id': sub_id,
+            'exam_date': future_date,
+            'daily_hours': '2.0',
+            'syllabus_text': 'Unit 1: Fundamentals\nArrays\nLinked Lists\nUnit 2: Non-Linear\nBinary Trees\nGraphs',
+            'title': 'Test DSA Roadmap'
+        }, follow_redirects=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Test DSA Roadmap', response.data)
+        self.assertIn(b'Arrays', response.data)
+        self.assertIn(b'Comprehensive Revision', response.data)
+
+        # Check in DB
+        with self.app.app_context():
+            plan = RoadmapPlan.query.filter_by(user_id=self.student_id).first()
+            self.assertIsNotNone(plan)
+            self.assertEqual(plan.title, 'Test DSA Roadmap')
+            self.assertFalse(plan.has_workload_warning)
+            self.assertGreater(len(plan.items), 4)
+
+    def test_roadmap_validation_past_date(self):
+        """Test that past exam date is rejected with clean error message"""
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+        past_date = (date.today() - timedelta(days=5)).isoformat()
+
+        with self.app.app_context():
+            sub = Subject.query.filter_by(user_id=self.student_id).first()
+            sub_id = sub.id
+
+        response = self.client.post('/roadmap/generate', data={
+            'subject_id': sub_id,
+            'exam_date': past_date,
+            'daily_hours': '2.0',
+            'syllabus_text': 'Topic 1\nTopic 2'
+        }, follow_redirects=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Exam date must be in the future', response.data)
+
+    def test_roadmap_workload_warning(self):
+        """Test that excessive syllabus volume triggers a workload warning"""
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+        # Exam is in 2 days, but student provides 20 topics with only 1 hr/day
+        near_date = (date.today() + timedelta(days=2)).isoformat()
+
+        with self.app.app_context():
+            sub = Subject.query.filter_by(user_id=self.student_id).first()
+            sub_id = sub.id
+
+        heavy_syllabus = "\n".join([f"Topic {i}" for i in range(1, 21)])
+
+        response = self.client.post('/roadmap/generate', data={
+            'subject_id': sub_id,
+            'exam_date': near_date,
+            'daily_hours': '1.0',
+            'syllabus_text': heavy_syllabus
+        }, follow_redirects=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'Workload Warning', response.data)
+
+    def test_roadmap_item_toggle_persistence(self):
+        """Test toggling a roadmap milestone and recalculating plan progress in DB"""
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+
+        with self.app.app_context():
+            sub = Subject.query.filter_by(user_id=self.student_id).first()
+            plan = RoadmapPlan(
+                user_id=self.student_id,
+                subject_id=sub.id,
+                exam_date=date.today() + timedelta(days=10),
+                total_topics_count=2,
+                completed_topics_count=0
+            )
+            db.session.add(plan)
+            db.session.flush()
+
+            item = RoadmapItem(
+                plan_id=plan.id,
+                day_number=1,
+                scheduled_date=date.today() + timedelta(days=1),
+                topic_title='Pointers in C',
+                is_completed=False
+            )
+            db.session.add(item)
+            db.session.commit()
+            item_id = item.id
+
+        # Toggle via API
+        toggle_res = self.client.post(f'/api/roadmap/toggle/{item_id}')
+        self.assertEqual(toggle_res.status_code, 200)
+        data = toggle_res.get_json()
+        self.assertTrue(data['success'])
+        self.assertTrue(data['is_completed'])
+        self.assertEqual(data['completed_count'], 1)
+        self.assertEqual(data['progress_percentage'], 50)
+
+        # Verify persistence in DB
+        with self.app.app_context():
+            updated_item = db.session.get(RoadmapItem, item_id)
+            self.assertTrue(updated_item.is_completed)
+            self.assertIsNotNone(updated_item.completed_at)
+
+    def test_explore_exams_search_and_filter(self):
+        """Test exploring verified national competitive and entrance exams"""
+        with self.app.app_context():
+            exam = OfficialExamDirectory(
+                exam_code='GATE',
+                exam_name='Graduate Aptitude Test in Engineering',
+                conducting_authority='IIT / IISc',
+                category='Engineering & Technology',
+                eligibility_summary='B.Tech or equivalent',
+                official_portal_url='https://gate2025.iitr.ac.in',
+                official_notification_note='Official brochure available on portal'
+            )
+            db.session.add(exam)
+            db.session.commit()
+
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+
+        # 1. Search by keyword
+        res = self.client.get('/explore-exams?q=GATE')
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b'Graduate Aptitude Test in Engineering', res.data)
+        self.assertIn(b'https://gate2025.iitr.ac.in', res.data)
+        self.assertIn(b'Verified Official Source', res.data)
+
+        # 2. Search nonexistent keyword
+        res_empty = self.client.get('/explore-exams?q=NonExistentExamXYZ')
+        self.assertEqual(res_empty.status_code, 200)
+        self.assertIn(b'No exams found matching', res_empty.data)
 
 if __name__ == '__main__':
     unittest.main()

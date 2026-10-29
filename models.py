@@ -16,11 +16,11 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
-    # Relationships
     subjects = db.relationship('Subject', backref='student', lazy=True, cascade='all, delete-orphan')
     tasks = db.relationship('Task', backref='student', lazy=True, cascade='all, delete-orphan')
     exams = db.relationship('Exam', backref='student', lazy=True, cascade='all, delete-orphan')
     timetable_entries = db.relationship('TimetableEntry', backref='student', lazy=True, cascade='all, delete-orphan')
+    roadmaps = db.relationship('RoadmapPlan', backref='student', lazy=True, cascade='all, delete-orphan')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -133,3 +133,72 @@ class TimetableEntry(db.Model):
 
     def __repr__(self):
         return f'<TimetableEntry {self.day_of_week} {self.start_time}-{self.end_time}>'
+
+
+class RoadmapPlan(db.Model):
+    __tablename__ = 'roadmap_plans'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
+    title = db.Column(db.String(150), default='Semester Exam Roadmap')
+    exam_date = db.Column(db.Date, nullable=False)
+    daily_study_hours = db.Column(db.Float, default=2.0, nullable=False)
+    total_topics_count = db.Column(db.Integer, default=0)
+    completed_topics_count = db.Column(db.Integer, default=0)
+    has_workload_warning = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    subject = db.relationship('Subject', backref=db.backref('roadmap_plans', lazy=True, cascade='all, delete-orphan'))
+    items = db.relationship('RoadmapItem', backref='plan', lazy=True, cascade='all, delete-orphan', order_by='RoadmapItem.day_number.asc()')
+
+    @property
+    def progress_percentage(self):
+        if self.total_topics_count <= 0:
+            return 0
+        return int(round((self.completed_topics_count / self.total_topics_count) * 100))
+
+    @property
+    def days_remaining(self):
+        return (self.exam_date - date.today()).days
+
+    def __repr__(self):
+        return f'<RoadmapPlan {self.title} for Subject {self.subject_id}>'
+
+
+class RoadmapItem(db.Model):
+    __tablename__ = 'roadmap_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    plan_id = db.Column(db.Integer, db.ForeignKey('roadmap_plans.id'), nullable=False)
+    day_number = db.Column(db.Integer, nullable=False)
+    scheduled_date = db.Column(db.Date, nullable=False)
+    unit_name = db.Column(db.String(100), default='Unit 1')
+    topic_title = db.Column(db.String(250), nullable=False)
+    estimated_hours = db.Column(db.Float, default=1.5)
+    is_revision = db.Column(db.Boolean, default=False)
+    is_completed = db.Column(db.Boolean, default=False, nullable=False)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+    def __repr__(self):
+        return f'<RoadmapItem Day {self.day_number}: {self.topic_title} (done={self.is_completed})>'
+
+
+class OfficialExamDirectory(db.Model):
+    __tablename__ = 'official_exam_directory'
+
+    id = db.Column(db.Integer, primary_key=True)
+    exam_code = db.Column(db.String(30), unique=True, nullable=False)
+    exam_name = db.Column(db.String(150), nullable=False)
+    conducting_authority = db.Column(db.String(150), nullable=False)
+    category = db.Column(db.String(60), nullable=False)  # 'Engineering', 'Management', 'Civil Services', etc.
+    eligibility_summary = db.Column(db.String(255), nullable=False)
+    official_portal_url = db.Column(db.String(255), nullable=False)
+    verification_status = db.Column(db.String(50), default='Verified Official Source')
+    last_verified_date = db.Column(db.String(30), default='October 2026')
+    official_notification_note = db.Column(db.String(255), nullable=False)
+
+    def __repr__(self):
+        return f'<OfficialExamDirectory {self.exam_code}>'

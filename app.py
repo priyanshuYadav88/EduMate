@@ -1,8 +1,9 @@
 import os
-from datetime import date, datetime
+import re
+from datetime import date, datetime, timedelta, timezone
 from flask import Flask, render_template, redirect, url_for, request, jsonify, flash
 from flask_login import LoginManager, login_required, current_user
-from models import db, User, Subject, Topic, Task, Exam, TimetableEntry
+from models import db, User, Subject, Topic, Task, Exam, TimetableEntry, RoadmapPlan, RoadmapItem, OfficialExamDirectory
 from auth import auth_bp
 from admin import admin_bp
 
@@ -239,6 +240,232 @@ def create_app():
     @login_required
     def settings_view():
         return render_template('settings.html')
+
+    # Study Roadmap Routes
+    @app.route('/roadmap')
+    @login_required
+    def roadmap_view():
+        subjects = Subject.query.filter_by(user_id=current_user.id).all()
+        plans = RoadmapPlan.query.filter_by(user_id=current_user.id).order_by(RoadmapPlan.created_at.desc()).all()
+
+        plan_id = request.args.get('plan_id', type=int)
+        selected_plan = None
+        if plan_id:
+            selected_plan = db.session.get(RoadmapPlan, plan_id)
+            if selected_plan and selected_plan.user_id != current_user.id:
+                selected_plan = None
+        if not selected_plan and plans:
+            selected_plan = plans[0]
+
+        return render_template('roadmap.html', subjects=subjects, plans=plans, selected_plan=selected_plan, today=date.today())
+
+    @app.route('/roadmap/generate', methods=['POST'])
+    @login_required
+    def generate_roadmap():
+        subject_id = request.form.get('subject_id', type=int)
+        exam_date_str = request.form.get('exam_date', '').strip()
+        daily_hours = request.form.get('daily_hours', type=float, default=2.0)
+        syllabus_text = request.form.get('syllabus_text', '').strip()
+        custom_title = request.form.get('title', '').strip()
+        reset_existing = request.form.get('reset_existing') == 'true'
+
+        # Validation 1: Subject verification and ownership
+        subject = db.session.get(Subject, subject_id) if subject_id else None
+        if not subject or subject.user_id != current_user.id:
+            flash('Please select a valid subject from your coursework.', 'danger')
+            return redirect(url_for('roadmap_view'))
+
+        # Validation 2: Exam date verification (must be in future)
+        if not exam_date_str:
+            flash('Please specify a target exam date.', 'danger')
+            return redirect(url_for('roadmap_view'))
+
+        try:
+            exam_date = date.fromisoformat(exam_date_str)
+        except ValueError:
+            flash('Invalid date format. Please select a valid date.', 'danger')
+            return redirect(url_for('roadmap_view'))
+
+        today = date.today()
+        available_days = (exam_date - today).days
+        if available_days <= 0:
+            flash('Exam date must be in the future (at least 1 day away).', 'danger')
+            return redirect(url_for('roadmap_view'))
+
+        # Validation 3: Syllabus parsing
+        topics_raw = []
+        if not syllabus_text:
+            if subject.topics:
+                topics_raw = [(f"Unit {idx // 3 + 1}", t.title) for idx, t in enumerate(subject.topics)]
+            else:
+                flash('Please enter syllabus units and topics, or add topics to this subject first.', 'danger')
+                return redirect(url_for('roadmap_view'))
+        else:
+            current_unit = "Unit 1: Overview"
+            for line in syllabus_text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                lower_line = line.lower()
+                if lower_line.startswith(('unit', 'module', 'chapter', 'section', 'part')):
+                    current_unit = line
+                else:
+                    clean_title = re.sub(r'^[0-9]+[\.\-\)]\s*|^[\*\-\•]\s*', '', line).strip()
+                    if clean_title:
+                        topics_raw.append((current_unit, clean_title))
+
+        if not topics_raw:
+            flash('Could not identify topics in the provided syllabus. Please enter one topic per line.', 'danger')
+            return redirect(url_for('roadmap_view'))
+
+        # Workload & Capacity Analysis
+        est_hours_per_topic = 1.5
+        total_required_hours = len(topics_raw) * est_hours_per_topic
+        total_available_hours = available_days * daily_hours
+        has_warning = total_required_hours > total_available_hours
+
+        # Plan Distribution Algorithm:
+        revision_days = max(1, min(4, int(available_days * 0.18)))
+        if available_days <= 3:
+            revision_days = 1
+        study_days = max(1, available_days - revision_days)
+
+        # Check existing plan for this subject to preserve progress if requested
+        existing_plan = RoadmapPlan.query.filter_by(user_id=current_user.id, subject_id=subject.id).first()
+        preserved_completions = {}
+        if existing_plan:
+            if not reset_existing:
+                for item in existing_plan.items:
+                    if item.is_completed:
+                        preserved_completions[item.topic_title.lower().strip()] = True
+            db.session.delete(existing_plan)
+            db.session.flush()
+
+        # Create new RoadmapPlan
+        plan_title = custom_title if custom_title else f"{subject.name} Exam Roadmap"
+        new_plan = RoadmapPlan(
+            user_id=current_user.id,
+            subject_id=subject.id,
+            title=plan_title,
+            exam_date=exam_date,
+            daily_study_hours=daily_hours,
+            total_topics_count=len(topics_raw) + revision_days,
+            completed_topics_count=0,
+            has_workload_warning=has_warning
+        )
+        db.session.add(new_plan)
+        db.session.flush()
+
+        # Distribute topics across study days
+        num_topics = len(topics_raw)
+        topics_per_day = max(1, int(round(num_topics / study_days)))
+
+        for idx, (unit_n, t_title) in enumerate(topics_raw):
+            day_offset = min(study_days - 1, idx // topics_per_day)
+            scheduled_date = today + timedelta(days=day_offset + 1)
+            is_comp = preserved_completions.get(t_title.lower().strip(), False)
+
+            item = RoadmapItem(
+                plan_id=new_plan.id,
+                day_number=day_offset + 1,
+                scheduled_date=scheduled_date,
+                unit_name=unit_n,
+                topic_title=t_title,
+                estimated_hours=est_hours_per_topic,
+                is_revision=False,
+                is_completed=is_comp
+            )
+            db.session.add(item)
+
+        # Add revision milestone days
+        for r_idx in range(revision_days):
+            rev_day_num = study_days + r_idx + 1
+            rev_date = today + timedelta(days=study_days + r_idx + 1)
+            rev_title = f"Comprehensive Revision & Mock Questions (Phase {r_idx + 1})" if revision_days > 1 else "Final Formula Review & Exam Rehearsal"
+            rev_item = RoadmapItem(
+                plan_id=new_plan.id,
+                day_number=rev_day_num,
+                scheduled_date=rev_date,
+                unit_name="Revision & Recall",
+                topic_title=rev_title,
+                estimated_hours=daily_hours,
+                is_revision=True,
+                is_completed=False
+            )
+            db.session.add(rev_item)
+
+        db.session.flush()
+        new_plan.completed_topics_count = sum(1 for i in new_plan.items if i.is_completed)
+        db.session.commit()
+
+        if has_warning:
+            flash(
+                f"Workload Warning: Syllabus requires ~{total_required_hours:.1f} hours, but you have ~{total_available_hours:.1f} available hours ({available_days} days @ {daily_hours}h/day). Plan generated with compressed pacing.",
+                'warning'
+            )
+        else:
+            flash(f"Study roadmap successfully generated for {subject.name}! {available_days} days allocated with {revision_days} revision days.", 'success')
+
+        return redirect(url_for('roadmap_view', plan_id=new_plan.id))
+
+    @app.route('/api/roadmap/toggle/<int:item_id>', methods=['POST'])
+    @login_required
+    def toggle_roadmap_item(item_id):
+        item = db.session.get(RoadmapItem, item_id)
+        if not item or item.plan.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Item not found'}), 404
+
+        item.is_completed = not item.is_completed
+        item.completed_at = datetime.now(timezone.utc) if item.is_completed else None
+
+        plan = item.plan
+        plan.completed_topics_count = sum(1 for i in plan.items if i.is_completed)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'item_id': item.id,
+            'is_completed': item.is_completed,
+            'completed_count': plan.completed_topics_count,
+            'total_count': plan.total_topics_count,
+            'progress_percentage': plan.progress_percentage
+        })
+
+    # Explore External Exams Directory Route
+    @app.route('/explore-exams')
+    @login_required
+    def explore_exams_view():
+        query = request.args.get('q', '').strip()
+        category = request.args.get('category', '').strip()
+
+        exam_query = OfficialExamDirectory.query
+        if category and category != 'All':
+            exam_query = exam_query.filter(OfficialExamDirectory.category == category)
+        if query:
+            search_pattern = f"%{query}%"
+            exam_query = exam_query.filter(
+                (OfficialExamDirectory.exam_name.ilike(search_pattern)) |
+                (OfficialExamDirectory.exam_code.ilike(search_pattern)) |
+                (OfficialExamDirectory.conducting_authority.ilike(search_pattern)) |
+                (OfficialExamDirectory.eligibility_summary.ilike(search_pattern))
+            )
+
+        exams = exam_query.all()
+        categories = db.session.query(OfficialExamDirectory.category).distinct().all()
+        categories_list = [c[0] for c in categories if c[0]]
+
+        # Live external search API status check
+        exam_api_key = os.environ.get('EXAM_SEARCH_API_KEY')
+        search_api_configured = bool(exam_api_key and len(exam_api_key.strip()) > 5)
+
+        return render_template(
+            'explore_exams.html',
+            exams=exams,
+            categories=categories_list,
+            selected_category=category,
+            search_query=query,
+            search_api_configured=search_api_configured
+        )
 
     return app
 

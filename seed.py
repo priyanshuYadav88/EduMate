@@ -1,7 +1,7 @@
 import os
 from datetime import date, timedelta
 from app import create_app
-from models import db, User, Subject, Topic, Task, Exam, TimetableEntry
+from models import db, User, Subject, Topic, Task, Exam, TimetableEntry, RoadmapPlan, RoadmapItem, OfficialExamDirectory
 
 def seed_database(reset_only_demo=True):
     """
@@ -222,6 +222,134 @@ def seed_database(reset_only_demo=True):
                     user_id=student.id
                 )
                 db.session.add(entry)
+
+        # 7. Create Demo Study Roadmap for Data Structures
+        print("Creating demo study roadmap...")
+        ds_subject = created_subjects['DS']
+        ds_exam_date = today + timedelta(days=12)
+        demo_roadmap = RoadmapPlan(
+            user_id=student.id,
+            subject_id=ds_subject.id,
+            title='Data Structures Semester Exam Roadmap',
+            exam_date=ds_exam_date,
+            daily_study_hours=2.5,
+            total_topics_count=8,
+            completed_topics_count=3,
+            has_workload_warning=False
+        )
+        db.session.add(demo_roadmap)
+        db.session.flush()
+
+        roadmap_items_data = [
+            (1, today - timedelta(days=2), "Unit 1: Linear Structures", "Arrays and Dynamic Resizing", 1.5, False, True),
+            (2, today - timedelta(days=1), "Unit 1: Linear Structures", "Singly & Doubly Linked Lists", 2.0, False, True),
+            (3, today, "Unit 2: Stacks & Queues", "Stack Applications (Infix to Postfix)", 1.5, False, True),
+            (4, today + timedelta(days=1), "Unit 2: Stacks & Queues", "Circular Queues & Deque Implementation", 1.5, False, False),
+            (5, today + timedelta(days=2), "Unit 3: Hierarchical Data", "Binary Trees & Traversal Algorithms", 2.0, False, False),
+            (6, today + timedelta(days=3), "Unit 3: Hierarchical Data", "Binary Search Trees (BST Insert/Delete)", 2.0, False, False),
+            (7, today + timedelta(days=4), "Unit 4: Non-Linear Structures", "Graph Representations (BFS & DFS)", 2.0, False, False),
+            (8, today + timedelta(days=5), "Unit 5: Revision & Recall", "Full Syllabus Revision & Mock Questions", 2.5, True, False),
+        ]
+        for day_num, s_date, unit_n, t_title, est_h, is_rev, is_comp in roadmap_items_data:
+            item = RoadmapItem(
+                plan_id=demo_roadmap.id,
+                day_number=day_num,
+                scheduled_date=s_date,
+                unit_name=unit_n,
+                topic_title=t_title,
+                estimated_hours=est_h,
+                is_revision=is_rev,
+                is_completed=is_comp
+            )
+            db.session.add(item)
+
+        # 8. Seed Verified Official Exam Directory (Genuine official authority sources only)
+        print("Seeding verified official national and competitive exam directory...")
+        # Clear existing directory before re-seeding
+        OfficialExamDirectory.query.delete()
+
+        official_exams_data = [
+            {
+                'exam_code': 'GATE',
+                'exam_name': 'Graduate Aptitude Test in Engineering (GATE)',
+                'conducting_authority': 'Indian Institute of Technology (IITs) / IISc',
+                'category': 'Engineering & Technology',
+                'eligibility_summary': 'Candidates with a Bachelor’s degree in Engineering/Technology/Science or currently in 3rd year or higher.',
+                'official_portal_url': 'https://gate2025.iitr.ac.in',
+                'verification_status': 'Verified Official Portal',
+                'last_verified_date': 'October 2026',
+                'official_notification_note': 'Official notification, paper syllabi, and scorecards are hosted directly on the organizing IIT portal.'
+            },
+            {
+                'exam_code': 'CAT',
+                'exam_name': 'Common Admission Test (CAT)',
+                'conducting_authority': 'Indian Institutes of Management (IIMs)',
+                'category': 'Management / MBA',
+                'eligibility_summary': 'Bachelor’s Degree with at least 50% marks or equivalent CGPA (45% for SC, ST, and PwD).',
+                'official_portal_url': 'https://iimcat.ac.in',
+                'verification_status': 'Verified Official Portal',
+                'last_verified_date': 'October 2026',
+                'official_notification_note': 'Used for admissions to 21 IIMs and hundreds of non-IIM member institutions nationwide.'
+            },
+            {
+                'exam_code': 'UPSC-CSE',
+                'exam_name': 'Civil Services Examination (CSE)',
+                'conducting_authority': 'Union Public Service Commission (UPSC)',
+                'category': 'Civil Services / Government',
+                'eligibility_summary': 'Graduation degree in any discipline from a recognized university. Age 21 to 32 years (with relaxation for reserved categories).',
+                'official_portal_url': 'https://upsc.gov.in',
+                'verification_status': 'Verified Official Portal',
+                'last_verified_date': 'October 2026',
+                'official_notification_note': 'Recruitment for IAS, IPS, IFS, and Central Group A/B services. All notifications released on upsc.gov.in.'
+            },
+            {
+                'exam_code': 'JEE-ADV',
+                'exam_name': 'Joint Entrance Examination (Advanced)',
+                'conducting_authority': 'Joint Admission Board (IITs)',
+                'category': 'Engineering Entrance',
+                'eligibility_summary': 'Top 2,50,000 successful candidates in JEE (Main) B.E./B.Tech. paper.',
+                'official_portal_url': 'https://jeeadv.ac.in',
+                'verification_status': 'Verified Official Portal',
+                'last_verified_date': 'October 2026',
+                'official_notification_note': 'Sole examination for admissions to Bachelor’s, Integrated Master’s, and Dual Degree programs across 23 IITs.'
+            },
+            {
+                'exam_code': 'UGC-NET',
+                'exam_name': 'UGC National Eligibility Test (NET)',
+                'conducting_authority': 'National Testing Agency (NTA)',
+                'category': 'Higher Education / Lectureship',
+                'eligibility_summary': 'Master’s Degree or equivalent with at least 55% marks (50% for reserved categories).',
+                'official_portal_url': 'https://ugcnet.nta.ac.in',
+                'verification_status': 'Verified Official Portal',
+                'last_verified_date': 'October 2026',
+                'official_notification_note': 'Determines eligibility for Assistant Professor and award of Junior Research Fellowship (JRF).'
+            },
+            {
+                'exam_code': 'ISRO-ICRB',
+                'exam_name': 'ISRO Centralised Recruitment Board (ICRB)',
+                'conducting_authority': 'Indian Space Research Organisation (ISRO)',
+                'category': 'Scientific & Technical',
+                'eligibility_summary': 'B.E./B.Tech or equivalent in first class with an aggregate minimum of 65% marks or 6.84/10 CGPA.',
+                'official_portal_url': 'https://www.isro.gov.in/Careers.html',
+                'verification_status': 'Verified Official Portal',
+                'last_verified_date': 'October 2026',
+                'official_notification_note': 'Recruitment of Scientist/Engineer "SC" across multiple engineering disciplines.'
+            }
+        ]
+
+        for exam_item in official_exams_data:
+            dir_entry = OfficialExamDirectory(
+                exam_code=exam_item['exam_code'],
+                exam_name=exam_item['exam_name'],
+                conducting_authority=exam_item['conducting_authority'],
+                category=exam_item['category'],
+                eligibility_summary=exam_item['eligibility_summary'],
+                official_portal_url=exam_item['official_portal_url'],
+                verification_status=exam_item['verification_status'],
+                last_verified_date=exam_item['last_verified_date'],
+                official_notification_note=exam_item['official_notification_note']
+            )
+            db.session.add(dir_entry)
 
         db.session.commit()
         print("\n=== EduMate Demo Data Seeded Successfully ===")

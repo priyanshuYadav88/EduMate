@@ -1487,6 +1487,99 @@ button, input, select, textarea {
 }
 
 /* ==========================================================================
+   Study Roadmap Planner Styles
+   ========================================================================== */
+
+.roadmap-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.roadmap-item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background-color: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    gap: 14px;
+    transition: background-color 0.15s ease;
+}
+
+.roadmap-item-row:hover {
+    background-color: #f1f5f9;
+}
+
+.roadmap-item-row.revision-row {
+    border-left: 4px solid var(--purple);
+    background-color: #faf5ff;
+}
+
+.roadmap-day-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 54px;
+    height: 48px;
+    background-color: var(--primary-light);
+    border: 1px solid #bfdbfe;
+    border-radius: var(--radius-md);
+    flex-shrink: 0;
+}
+
+.day-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1.1;
+}
+
+.day-date {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.roadmap-item-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.roadmap-topic-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.roadmap-unit-tag {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.roadmap-topic-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.roadmap-item-row.completed .roadmap-topic-name {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.roadmap-item-meta {
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
    Responsive Adaptations (1366px, 1024px, 768px, 390px)
    ========================================================================== */
 
