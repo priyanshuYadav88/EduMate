@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}My Subjects — EduMate{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row">
+        <div>
+            <h1 class="welcome-title">My Subjects & Syllabus</h1>
+            <p class="welcome-subtitle">Manage coursework, track topic-by-topic completion, and plan units</p>
+        </div>
+        <button class="btn btn-primary" onclick="document.getElementById('addSubjectModal').style.display='flex'">+ Add Subject</button>
+    </div>
+
+    <div class="subjects-cards-grid">
+        {% if subjects %}
+            {% for subj in subjects %}
+            <div class="card subject-detail-card">
+                <div class="subject-card-top">
+                    <div class="subject-lead">
+                        <span class="subject-icon-box" style="background-color: {{ subj.color }}18; color: {{ subj.color }};">
+                            {% if subj.icon == 'cpu' %}
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                            {% elif subj.icon == 'gear' %}
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            {% elif subj.icon == 'database' %}
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                            {% elif subj.icon == 'pi' %}
+                            <span class="math-pi-symbol">&pi;</span>
+                            {% else %}
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                            {% endif %}
+                        </span>
+                        <div>
+                            <h3 class="subject-card-title">{{ subj.name }}</h3>
+                            <span class="text-muted-sm">{{ subj.code }} &bull; {{ subj.completed_topics }}/{{ subj.total_topics }} topics completed</span>
+                        </div>
+                    </div>
+                    <span class="pill-badge" style="background-color: {{ subj.color }}20; color: {{ subj.color }};">
+                        {{ subj.progress_percentage }}%
+                    </span>
+                </div>
+
+                <div class="subject-bar-container" style="margin: 14px 0;">
+                    <div class="subject-bar-fill" style="width: {{ subj.progress_percentage }}%; background-color: {{ subj.color }};"></div>
+                </div>
+
+                <!-- Topics Accordion / List -->
+                <div class="topics-compact-list">
+                    {% for topic in subj.topics %}
+                    <div class="topic-compact-item">
+                        <label class="task-checkbox-label">
+                            <input type="checkbox" {% if topic.is_completed %}checked{% endif %} disabled>
+                            <span class="custom-checkbox"></span>
+                            <span class="{% if topic.is_completed %}text-strikethrough{% endif %}">{{ topic.title }}</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="card empty-state" style="grid-column: 1 / -1; padding: 48px;">
+                <p>No subjects added yet. Add your first subject to begin tracking your syllabus.</p>
+                <button class="btn btn-primary" onclick="document.getElementById('addSubjectModal').style.display='flex'">+ Add Subject</button>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal for adding Subject -->
+<div class="modal-backdrop" id="addSubjectModal" style="display: none;">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Add New Subject</h3>
+            <button type="button" class="modal-close-btn" onclick="document.getElementById('addSubjectModal').style.display='none'">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('subjects_view') }}">
+            <div class="form-group">
+                <label for="subName">Subject Name</label>
+                <input type="text" id="subName" name="name" class="form-control" placeholder="e.g. Artificial Intelligence" required>
+            </div>
+            <div class="form-group">
+                <label for="subCode">Subject Code</label>
+                <input type="text" id="subCode" name="code" class="form-control" placeholder="e.g. AI" required>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('addSubjectModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Subject</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

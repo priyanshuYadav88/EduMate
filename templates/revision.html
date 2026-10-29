@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}Revision Planner — EduMate{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row">
+        <div>
+            <h1 class="welcome-title">Active Revision Tracker</h1>
+            <p class="welcome-subtitle">Prioritize difficult topics and spaced repetition schedules</p>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+        <div class="card-header">
+            <h2 class="card-title">Pending Topics Requiring Revision</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Topic Name</th>
+                        <th>Status</th>
+                        <th>Priority</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for subj in subjects %}
+                        {% for topic in subj.topics %}
+                            {% if not topic.is_completed %}
+                            <tr>
+                                <td>
+                                    <span class="pill-badge" style="background-color: {{ subj.color }}15; color: {{ subj.color }};">
+                                        {{ subj.name }}
+                                    </span>
+                                </td>
+                                <td>{{ topic.title }}</td>
+                                <td><span class="status-badge status-pending">Unfinished</span></td>
+                                <td><span class="pill-badge pill-important">High Priority</span></td>
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

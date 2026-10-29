@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Timetable — EduMate{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row">
+        <div>
+            <h1 class="welcome-title">Study Timetable</h1>
+            <p class="welcome-subtitle">Weekly routine, lecture schedule, and dedicated revision blocks</p>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+        <div class="card-header">
+            <h2 class="card-title">Weekly Schedule Overview</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Day</th>
+                        <th>Time Slot</th>
+                        <th>Subject</th>
+                        <th>Topic Planned</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if entries %}
+                        {% for entry in entries %}
+                        <tr>
+                            <td><strong>{{ entry.day_of_week }}</strong></td>
+                            <td>{{ entry.start_time }} - {{ entry.end_time }}</td>
+                            <td>
+                                <span class="pill-badge" style="background-color: {{ entry.subject.color }}15; color: {{ entry.subject.color }};">
+                                    {{ entry.subject.name }} ({{ entry.subject.code }})
+                                </span>
+                            </td>
+                            <td>{{ entry.topic }}</td>
+                            <td>
+                                <span class="status-badge status-{{ entry.status|lower|replace(' ', '-') }}">{{ entry.status }}</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5" style="text-align: center; padding: 32px;" class="text-muted">
+                                No timetable entries found. Seed demo data or add slots to plan your week.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
