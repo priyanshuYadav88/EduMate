@@ -3,10 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduMate</title>
+    <title>Edumate</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <h1>Welcome to EduMate</h1>
-<p>Your personal study planner</p>
+    <aside>
+        <h1>EduMate</h1>
+        <nav>
+            <a href="#">Dashboard</a>
+            <a href="#">My Subjects</a>
+            <a href="#">Study Timetable</a>
+            <a href="#">My Tasks</a>
+        </nav>
+
+    </aside>
+    <main>
+        <header>
+            <h2>Welcome back, Student!</h2>
+        </header>
+        <p>Let's make today productive.</p>
+        <section>
+            <h2>My Subjects</h2>
+            <div class="subjects-list">
+            <article>
+                <h3>Python Programming</h3>
+                <p>8 of 12 topics completed</p>
+                <span>Progress: 67%</span>
+            </article>
+            <article>
+                <h3>Data Structures</h3>
+                <p>5 of 15 topics completed</p>
+                <span>Progress: 33%</span>
+            </article>
+            <article>
+                <h3>Computer Organization</h3>
+                <p>7 of 10 topics completed</p>
+                <span>Progress: 70%</span>
+            </article>
+            </div>
+        </section>
+        <section>
+            <h2>Today's Tasks</h2>
+            <article>
+                <label>
+                    <input type="checkbox">
+                    Revise Python functions
+                 </label>
+            </article>
+            <article>
+                <label>
+                    <input type="checkbox">
+                    Practice linked lists
+                 </label>
+            </article>
+            <article>
+                <label>
+                    <input type="checkbox">
+                    Solve Maths questions
+                 </label>
+            </article>
+        </section>
+    </main>
 </body>
 </html>

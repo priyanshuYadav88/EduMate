@@ -1,0 +1,28 @@
+body {
+    background-color: #0b0f19;
+    color: #edf2fc;
+    margin: 0;
+    display: flex;
+}
+aside {
+    width: 240px;
+    background-color: #101522;
+    padding: 24px;
+}
+main {
+    flex: 1;
+    padding: 32px;
+    
+}
+.subjects-list{
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.subjects-list article{
+    background-color: #141b2b;
+    padding: 20px;
+    border-radius: 12px;
+    flex: 1;
+    border: 1px solid #252e40;
+}
