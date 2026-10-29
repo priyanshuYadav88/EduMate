@@ -112,7 +112,7 @@
                         {% if subjects %}
                             {% for subj in subjects %}
                             <div class="subject-progress-item">
-                                <div class="subject-lead">
+                                <div class="subject-lead" title="{{ subj.name }}">
                                     <span class="subject-icon-box" style="background-color: {{ subj.color }}18; color: {{ subj.color }};">
                                         {% if subj.icon == 'cpu' %}
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
@@ -126,7 +126,7 @@
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
                                         {% endif %}
                                     </span>
-                                    <span class="subject-title">{{ subj.name }}</span>
+                                    <span class="subject-title" title="{{ subj.name }}">{{ subj.name }}</span>
                                 </div>
                                 <div class="subject-bar-container">
                                     <div class="subject-bar-fill" style="width: {{ subj.progress_percentage }}%; background-color: {{ subj.color }};"></div>
@@ -258,17 +258,21 @@
                         </div>
                         <span class="ai-header-title">AI Study Assistant</span>
                     </div>
-
-                    <!-- Honest Status Indicator (No fake simulation) -->
-                    {% if ai_online %}
-                    <span class="ai-status-pill online">
-                        <span class="status-pulse-dot"></span> Online
-                    </span>
-                    {% else %}
-                    <span class="ai-status-pill offline" title="Set GEMINI_API_KEY environment variable to enable real AI">
-                        <span class="status-pulse-dot offline-dot"></span> Offline
-                    </span>
-                    {% endif %}
+                    <div class="ai-header-actions">
+                        <!-- Honest Status Indicator (No fake simulation) -->
+                        {% if ai_online %}
+                        <span class="ai-status-pill online">
+                            <span class="status-pulse-dot"></span> Online
+                        </span>
+                        {% else %}
+                        <span class="ai-status-pill offline" title="Set GEMINI_API_KEY environment variable to enable real AI">
+                            <span class="status-pulse-dot offline-dot"></span> Offline
+                        </span>
+                        {% endif %}
+                        <button type="button" class="ai-collapse-toggle-btn" onclick="toggleAiAssistantPanel()" aria-label="Toggle AI Assistant" title="Collapse or Expand Assistant">
+                            <svg class="ai-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Chat Body -->

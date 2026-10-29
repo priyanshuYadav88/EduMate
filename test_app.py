@@ -131,5 +131,21 @@ class EduMateTestCase(unittest.TestCase):
         self.assertFalse(data.get('online', True))
         self.assertIn('offline', data['reply'].lower())
 
+    def test_standalone_auth_layout_without_sidebar(self):
+        """Verify login and register pages render standalone layout without sidebar/searchbar"""
+        login_page = self.client.get('/login')
+        self.assertEqual(login_page.status_code, 200)
+        self.assertNotIn(b'<aside class="sidebar">', login_page.data)
+        self.assertNotIn(b'id="globalSearchInput"', login_page.data)
+        self.assertNotIn(b'notification-btn', login_page.data)
+        self.assertIn(b'Welcome Back to EduMate', login_page.data)
+
+        register_page = self.client.get('/register')
+        self.assertEqual(register_page.status_code, 200)
+        self.assertNotIn(b'<aside class="sidebar">', register_page.data)
+        self.assertNotIn(b'id="globalSearchInput"', register_page.data)
+        self.assertIn(b'Create Student Account', register_page.data)
+
 if __name__ == '__main__':
     unittest.main()
+

@@ -211,3 +211,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// 7. Toggle AI Assistant Panel Collapse / Expand
+function toggleAiAssistantPanel() {
+    const card = document.getElementById('ai-assistant-card');
+    if (card) {
+        card.classList.toggle('collapsed');
+    }
+}
