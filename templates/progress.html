@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}Syllabus Progress — EduMate{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row">
+        <div>
+            <h1 class="welcome-title">Academic Progress Analytics</h1>
+            <p class="welcome-subtitle">Transparent mathematical breakdown of syllabus completion based on database records</p>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+        <div class="card-header">
+            <h2 class="card-title">Subject-wise Completion Breakdown</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Subject Name</th>
+                        <th>Subject Code</th>
+                        <th>Completed Topics</th>
+                        <th>Total Topics</th>
+                        <th>Completion Ratio</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for subj in subjects %}
+                    <tr>
+                        <td><strong>{{ subj.name }}</strong></td>
+                        <td><code>{{ subj.code }}</code></td>
+                        <td>{{ subj.completed_topics }}</td>
+                        <td>{{ subj.total_topics }}</td>
+                        <td>
+                            <div class="subject-bar-container" style="max-width: 140px;">
+                                <div class="subject-bar-fill" style="width: {{ subj.progress_percentage }}%; background-color: {{ subj.color }};"></div>
+                            </div>
+                        </td>
+                        <td><strong>{{ subj.progress_percentage }}%</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Panel — EduMate{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+    <div class="admin-header-row">
+        <div>
+            <h1 class="welcome-title">Admin Dashboard</h1>
+            <p class="welcome-subtitle">Platform health, user oversight, and database monitoring</p>
+        </div>
+        <div class="admin-badge-pill">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Administrator Access Enforced</span>
+        </div>
+    </div>
+
+    <!-- Metrics Summary Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon-wrapper bg-blue-subtle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-label">Total Users</span>
+                <span class="stat-value">{{ total_users }}</span>
+                <span class="stat-footnote">{{ total_students }} Students, {{ total_admins }} Admin</span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon-wrapper bg-green-subtle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-label">Active Accounts</span>
+                <span class="stat-value">{{ active_users }}</span>
+                <span class="stat-footnote">Eligible for login</span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon-wrapper bg-purple-subtle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-label">Total Subjects</span>
+                <span class="stat-value">{{ total_subjects }}</span>
+                <span class="stat-footnote">Across all students</span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon-wrapper bg-pink-subtle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-label">Tasks & Exams</span>
+                <span class="stat-value">{{ total_tasks }} / {{ total_exams }}</span>
+                <span class="stat-footnote">Tasks / Exam milestones</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Registered Users Management Table -->
+    <div class="card" style="margin-top: 24px;">
+        <div class="card-header">
+            <h2 class="card-title">User Accounts Directory</h2>
+            <span class="text-muted-sm">{{ users|length }} Total Registered</span>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>User</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Joined</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>#{{ u.id }}</td>
+                        <td>
+                            <strong>{{ u.username }}</strong>
+                            {% if u.id == current_user.id %}
+                            <span class="pill-badge pill-info" style="margin-left: 6px;">You</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ u.email }}</td>
+                        <td>
+                            <span class="pill-badge {% if u.role == 'admin' %}pill-important{% else %}pill-neutral{% endif %}">
+                                {{ u.role|capitalize }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if u.is_active %}
+                            <span class="status-badge status-completed">Active</span>
+                            {% else %}
+                            <span class="status-badge status-pending">Deactivated</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ u.created_at.strftime('%d %b %Y') }}</td>
+                        <td style="text-align: right;">
+                            {% if u.id != current_user.id %}
+                            <form method="POST" action="{{ url_for('admin.toggle_user', user_id=u.id) }}" style="display: inline-block;">
+                                <button type="submit" class="btn btn-outline btn-sm">
+                                    {% if u.is_active %}Deactivate{% else %}Activate{% endif %}
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('admin.delete_user', user_id=u.id) }}" style="display: inline-block; margin-left: 4px;" onsubmit="return confirm('Are you sure you want to permanently delete user {{ u.username }}?');">
+                                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                            </form>
+                            {% else %}
+                            <span class="text-muted-sm">Current Admin</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- System Health & Database Diagnostics -->
+    <div class="card" style="margin-top: 24px;">
+        <div class="card-header">
+            <h2 class="card-title">System & Database Health</h2>
+        </div>
+        <div class="system-health-grid">
+            <div class="health-item">
+                <span class="health-label">Database Engine</span>
+                <span class="health-val">{{ health_info.database_type }} (v{{ health_info.sqlite_version }})</span>
+            </div>
+            <div class="health-item">
+                <span class="health-label">Database Size</span>
+                <span class="health-val">{{ health_info.database_size_kb }} KB</span>
+            </div>
+            <div class="health-item">
+                <span class="health-label">Integrity Status</span>
+                <span class="health-val text-success">✓ {{ health_info.status }}</span>
+            </div>
+            <div class="health-item">
+                <span class="health-label">Role Isolation Check</span>
+                <span class="health-val text-success">✓ Server-side 403 Enforcement Enabled</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

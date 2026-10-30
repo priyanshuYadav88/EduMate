@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}Settings — EduMate{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row">
+        <div>
+            <h1 class="welcome-title">Settings & Profile</h1>
+            <p class="welcome-subtitle">Account details, viva demonstration helpers, and data management</p>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px; max-width: 650px;">
+        <div class="card-header">
+            <h2 class="card-title">User Account Info</h2>
+        </div>
+        <div style="padding: 8px 0;">
+            <p><strong>Username:</strong> {{ current_user.username }}</p>
+            <p><strong>Email:</strong> {{ current_user.email }}</p>
+            <p><strong>Role:</strong> <span class="pill-badge pill-info">{{ current_user.role|capitalize }}</span></p>
+            <p><strong>Account Status:</strong> <span class="status-badge status-completed">Active</span></p>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 24px; max-width: 650px;">
+        <div class="card-header">
+            <h2 class="card-title">Demo Data Control</h2>
+        </div>
+        <div style="padding: 8px 0;">
+            <p class="text-muted-sm" style="margin-bottom: 16px;">
+                You can reset the isolated test accounts and sample syllabus at any time without affecting personal student data. Run in your terminal:
+            </p>
+            <pre style="background: #f1f5f9; padding: 12px; border-radius: 8px; font-size: 13px; color: #1e293b;"><code>python seed.py</code></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}

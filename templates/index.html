@@ -1,68 +1,356 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edumate</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <aside>
-        <h1>EduMate</h1>
-        <nav>
-            <a href="#">Dashboard</a>
-            <a href="#">My Subjects</a>
-            <a href="#">Study Timetable</a>
-            <a href="#">My Tasks</a>
-        </nav>
+{% extends 'base.html' %}
 
-    </aside>
-    <main>
-        <header>
-            <h2>Welcome back, Student!</h2>
-        </header>
-        <p>Let's make today productive.</p>
-        <section>
-            <h2>My Subjects</h2>
-            <div class="subjects-list">
-            <article>
-                <h3>Python Programming</h3>
-                <p>8 of 12 topics completed</p>
-                <span>Progress: 67%</span>
-            </article>
-            <article>
-                <h3>Data Structures</h3>
-                <p>5 of 15 topics completed</p>
-                <span>Progress: 33%</span>
-            </article>
-            <article>
-                <h3>Computer Organization</h3>
-                <p>7 of 10 topics completed</p>
-                <span>Progress: 70%</span>
-            </article>
+{% block title %}Dashboard — EduMate{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Welcome Header Banner -->
+    <section class="welcome-header">
+        <div class="welcome-left">
+            <h1 class="welcome-title">Welcome Back! <span class="wave-emoji">👏</span></h1>
+            <p class="welcome-subtitle">Let's make today productive.</p>
+        </div>
+        <div class="welcome-right">
+            <div class="date-badge">{{ current_date_formatted }}</div>
+            <div class="date-greeting">Good luck with your studies!</div>
+        </div>
+    </section>
+
+    <!-- Top 4 Summary Metric Cards (Computed from Real DB Queries) -->
+    <section class="stats-grid">
+        <!-- Card 1: Total Subjects -->
+        <div class="stat-card">
+            <div class="stat-icon-wrapper bg-blue-subtle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
             </div>
-        </section>
-        <section>
-            <h2>Today's Tasks</h2>
-            <article>
-                <label>
-                    <input type="checkbox">
-                    Revise Python functions
-                 </label>
-            </article>
-            <article>
-                <label>
-                    <input type="checkbox">
-                    Practice linked lists
-                 </label>
-            </article>
-            <article>
-                <label>
-                    <input type="checkbox">
-                    Solve Maths questions
-                 </label>
-            </article>
-        </section>
-    </main>
-</body>
-</html>
+            <div class="stat-info">
+                <span class="stat-label">Total Subjects</span>
+                <span class="stat-value" id="statTotalSubjects">{{ total_subjects }}</span>
+                <span class="stat-footnote">Active subjects</span>
+            </div>
+        </div>
+
+        <!-- Card 2: Syllabus Completed -->
+        <div class="stat-card">
+            <div class="stat-icon-wrapper bg-green-subtle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-label">Syllabus Completed</span>
+                <span class="stat-value" id="statSyllabusPercent">{{ overall_progress }}%</span>
+                <div class="stat-progress-bar-wrap">
+                    <div class="stat-progress-bar" style="width: {{ overall_progress }}%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Next Exam -->
+        <div class="stat-card">
+            <div class="stat-icon-wrapper bg-pink-subtle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-label">Next Exam</span>
+                <span class="stat-value stat-value-highlight">
+                    {% if next_exam %}
+                        {{ next_exam.days_left }} days
+                    {% else %}
+                        None
+                    {% endif %}
+                </span>
+                <span class="stat-footnote">
+                    {% if next_exam %}
+                        {{ next_exam.subject.name }}
+                    {% else %}
+                        No upcoming exams
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- Card 4: Today's Tasks -->
+        <div class="stat-card">
+            <div class="stat-icon-wrapper bg-purple-subtle">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="6"/>
+                    <circle cx="12" cy="12" r="2"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <span class="stat-label">Today's Tasks</span>
+                <span class="stat-value" id="statTodayTasks">{{ completed_tasks_count }}/{{ total_tasks_count }}</span>
+                <span class="stat-footnote">completed</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content Workspace (Split Columns) -->
+    <div class="dashboard-main-grid">
+        <!-- Center Primary Content Area -->
+        <div class="dashboard-left-column">
+            <!-- Row 1: Subject Progress & Upcoming Exams Side-by-Side -->
+            <div class="two-column-row">
+                <!-- Subject Progress Card -->
+                <div class="card card-subject-progress">
+                    <div class="card-header">
+                        <h2 class="card-title">Subject Progress</h2>
+                        <a href="{{ url_for('subjects_view') }}" class="card-header-link">View All &rarr;</a>
+                    </div>
+                    <div class="subject-progress-list">
+                        {% if subjects %}
+                            {% for subj in subjects %}
+                            <div class="subject-progress-item">
+                                <div class="subject-lead" title="{{ subj.name }}">
+                                    <span class="subject-icon-box" style="background-color: {{ subj.color }}18; color: {{ subj.color }};">
+                                        {% if subj.icon == 'cpu' %}
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                                        {% elif subj.icon == 'gear' %}
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                                        {% elif subj.icon == 'database' %}
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                                        {% elif subj.icon == 'pi' %}
+                                        <span class="math-pi-symbol">&pi;</span>
+                                        {% else %}
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                                        {% endif %}
+                                    </span>
+                                    <span class="subject-title" title="{{ subj.name }}">{{ subj.name }}</span>
+                                </div>
+                                <div class="subject-bar-container">
+                                    <div class="subject-bar-fill" style="width: {{ subj.progress_percentage }}%; background-color: {{ subj.color }};"></div>
+                                </div>
+                                <span class="subject-percentage-label">{{ subj.progress_percentage }}%</span>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <p>No subjects added yet.</p>
+                                <a href="{{ url_for('subjects_view') }}" class="btn btn-outline btn-sm">Add First Subject</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Upcoming Exams Card -->
+                <div class="card card-upcoming-exams">
+                    <div class="card-header">
+                        <h2 class="card-title">Upcoming Exams</h2>
+                        <a href="{{ url_for('dashboard') }}" class="card-header-link">View All &rarr;</a>
+                    </div>
+                    <div class="exams-list">
+                        {% if upcoming_exams %}
+                            {% for exam in upcoming_exams %}
+                            <div class="exam-row">
+                                <div class="exam-date-box">
+                                    <span class="exam-day-num">{{ exam.exam_date.strftime('%d') }}</span>
+                                    <span class="exam-month-name">{{ exam.exam_date.strftime('%b') }}</span>
+                                </div>
+                                <div class="exam-details">
+                                    <span class="exam-subject-name">{{ exam.subject.name }}</span>
+                                    <span class="exam-countdown-text">{{ exam.days_left }} days left</span>
+                                </div>
+                                {% if exam.is_important %}
+                                <span class="pill-badge pill-important">Important</span>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <p>No exams currently scheduled.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Today's Schedule & Today's Tasks Side-by-Side -->
+            <div class="two-column-row">
+                <!-- Today's Schedule Card -->
+                <div class="card card-schedule">
+                    <div class="card-header">
+                        <h2 class="card-title">Today's Schedule</h2>
+                        <a href="{{ url_for('timetable_view') }}" class="card-header-link">View Full Timetable &rarr;</a>
+                    </div>
+                    <div class="schedule-timeline">
+                        {% if today_schedule %}
+                            {% for item in today_schedule %}
+                            <div class="schedule-row">
+                                <span class="schedule-time">{{ item.start_time }} - {{ item.end_time }}</span>
+                                <span class="timeline-dot" style="background-color: {{ item.subject.color }};"></span>
+                                <div class="schedule-info">
+                                    <span class="schedule-subject-name">{{ item.subject.name }}</span>
+                                    <span class="schedule-topic-name">{{ item.topic }}</span>
+                                </div>
+                                <span class="status-badge status-{{ item.status|lower|replace(' ', '-') }}">{{ item.status }}</span>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <p>No timetable slots set for today.</p>
+                                <a href="{{ url_for('timetable_view') }}" class="btn btn-outline btn-sm">Configure Timetable</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Today's Tasks Card -->
+                <div class="card card-tasks">
+                    <div class="card-header">
+                        <h2 class="card-title">Today's Tasks</h2>
+                        <button class="btn btn-primary btn-sm" onclick="openAddTaskModal()">+ Add Task</button>
+                    </div>
+                    <div class="tasks-checklist" id="tasksChecklistContainer">
+                        {% if today_tasks %}
+                            {% for task in today_tasks %}
+                            <div class="task-item {% if task.is_completed %}completed{% endif %}" id="task-row-{{ task.id }}">
+                                <label class="task-checkbox-label">
+                                    <input type="checkbox"
+                                           class="task-checkbox"
+                                           data-task-id="{{ task.id }}"
+                                           {% if task.is_completed %}checked{% endif %}
+                                           onchange="toggleTaskStatus({{ task.id }})">
+                                    <span class="custom-checkbox"></span>
+                                    <span class="task-title-text">{{ task.title }}</span>
+                                </label>
+                                {% if task.subject and task.subject.code %}
+                                <span class="task-subject-pill" style="color: {{ task.subject.color }}; background-color: {{ task.subject.color }}15;">
+                                    {{ task.subject.code }}
+                                </span>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state" id="tasksEmptyState">
+                                <p>All clear! No tasks for today.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: AI Study Assistant Panel -->
+        <aside class="dashboard-right-column">
+            <div class="card card-ai-assistant" id="ai-assistant-card">
+                <!-- AI Assistant Header -->
+                <div class="ai-card-header">
+                    <div class="ai-title-wrap">
+                        <div class="ai-avatar-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="10" rx="2"/>
+                                <circle cx="12" cy="5" r="2"/>
+                                <path d="M12 7v4"/>
+                                <line x1="8" y1="16" x2="8" y2="16"/>
+                                <line x1="16" y1="16" x2="16" y2="16"/>
+                            </svg>
+                        </div>
+                        <span class="ai-header-title">AI Study Assistant</span>
+                    </div>
+                    <div class="ai-header-actions">
+                        <!-- Honest Status Indicator (No fake simulation) -->
+                        {% if ai_online %}
+                        <span class="ai-status-pill online">
+                            <span class="status-pulse-dot"></span> Online
+                        </span>
+                        {% else %}
+                        <span class="ai-status-pill offline" title="Set GEMINI_API_KEY environment variable to enable real AI">
+                            <span class="status-pulse-dot offline-dot"></span> Offline
+                        </span>
+                        {% endif %}
+                        <button type="button" class="ai-collapse-toggle-btn" onclick="toggleAiAssistantPanel()" aria-label="Toggle AI Assistant" title="Collapse or Expand Assistant">
+                            <svg class="ai-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Chat Body -->
+                <div class="ai-chat-body" id="aiChatBody">
+                    <!-- Intro Bubble -->
+                    <div class="ai-message-bubble">
+                        <div class="ai-message-avatar">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
+                        </div>
+                        <div class="ai-message-content">
+                            <p class="ai-intro-lead">Hi! I'm your EduMate AI Assistant. I can help you with:</p>
+                            <ul class="ai-help-list">
+                                <li>🎓 Explain any topic</li>
+                                <li>📅 Create study plans</li>
+                                <li>📝 Generate practice questions</li>
+                                <li>📑 Summarize notes</li>
+                                <li>💡 Help with doubts</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Prompt Suggestion Chips -->
+                    <div class="ai-chips-container">
+                        <span class="ai-chips-label">Try asking:</span>
+                        <button type="button" class="ai-prompt-chip" onclick="askAiPrompt('Explain binary search')">Explain binary search</button>
+                        <button type="button" class="ai-prompt-chip" onclick="askAiPrompt('Create a study plan for DBMS')">Create a study plan for DBMS</button>
+                        <button type="button" class="ai-prompt-chip" onclick="askAiPrompt('Give me 5 quiz questions on OS')">Give me 5 quiz questions on OS</button>
+                        <button type="button" class="ai-prompt-chip" onclick="askAiPrompt('Summarize this topic')">Summarize this topic</button>
+                    </div>
+                </div>
+
+                <!-- Chat Input Row -->
+                <div class="ai-input-wrapper">
+                    <form id="aiChatForm" onsubmit="handleAiChatSubmit(event)">
+                        <input type="text"
+                               id="aiChatInput"
+                               class="ai-chat-field"
+                               placeholder="Ask me anything..."
+                               autocomplete="off">
+                        <button type="submit" class="ai-send-btn" id="aiSendBtn" aria-label="Send query">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"/>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<!-- Add Task Modal -->
+<div class="modal-backdrop" id="addTaskModal" style="display: none;">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Add New Task for Today</h3>
+            <button type="button" class="modal-close-btn" onclick="closeAddTaskModal()">&times;</button>
+        </div>
+        <form onsubmit="handleCreateTask(event)">
+            <div class="form-group">
+                <label for="taskTitleInput">Task Description</label>
+                <input type="text" id="taskTitleInput" class="form-control" placeholder="e.g. Solve 5 problems on Stacks" required>
+            </div>
+            <div class="form-group">
+                <label for="taskSubjectSelect">Subject</label>
+                <select id="taskSubjectSelect" class="form-control">
+                    <option value="">General / None</option>
+                    {% for subj in subjects %}
+                    <option value="{{ subj.id }}">{{ subj.name }} ({{ subj.code }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeAddTaskModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Task</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

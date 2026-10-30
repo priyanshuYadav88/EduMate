@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block title %}Explore Exams — EduMate{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row">
+        <div>
+            <h1 class="welcome-title">Explore Competitive & Academic Exams</h1>
+            <p class="welcome-subtitle">Direct links to official entrance portals, conducting bodies, and verified eligibility criteria</p>
+        </div>
+    </div>
+
+    <!-- Official Source Disclaimer & Transparency Callout -->
+    <div class="demo-credentials-callout" style="margin-top: 0; margin-bottom: 24px; background-color: #f0fdf4; border-color: #bbf7d0; color: #166534;">
+        <div class="callout-header" style="color: #15803d;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <strong>Official Authority Verification Guarantee</strong>
+        </div>
+        <p style="font-size: 13px; line-height: 1.5; margin-bottom: 6px;">
+            To protect students from misleading advertisements, outdated deadlines, and unofficial third-party fees, EduMate references only verified portals published by authorized national bodies (IITs, IIMs, UPSC, NTA, ISRO).
+        </p>
+        {% if not search_api_configured %}
+        <small style="color: #16a34a; display: block;">
+            Notice: Live external search engine API is not configured (optional: set <code>EXAM_SEARCH_API_KEY</code>). Showing our verified official national authority directory below.
+        </small>
+        {% endif %}
+    </div>
+
+    <!-- Search and Filter Form -->
+    <div class="card" style="margin-bottom: 24px;">
+        <form method="GET" action="{{ url_for('explore_exams_view') }}" class="exam-search-form">
+            <div style="display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end;">
+                <div style="flex: 2; min-width: 240px;">
+                    <label for="examSearchQuery" style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Search Keyword</label>
+                    <input type="text"
+                           id="examSearchQuery"
+                           name="q"
+                           class="form-control"
+                           placeholder="Search by exam name (e.g. GATE, CAT, UPSC, Engineering)..."
+                           value="{{ search_query }}">
+                </div>
+
+                <div style="flex: 1; min-width: 200px;">
+                    <label for="categoryFilter" style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Category</label>
+                    <select id="categoryFilter" name="category" class="form-control">
+                        <option value="All">All Categories</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                    <button type="submit" class="btn btn-primary" style="height: 42px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        Filter
+                    </button>
+                    {% if search_query or (selected_category and selected_category != 'All') %}
+                    <a href="{{ url_for('explore_exams_view') }}" class="btn btn-outline" style="height: 42px;">Reset</a>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Exam Cards Directory -->
+    <div class="exams-directory-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+        {% if exams %}
+            {% for exam in exams %}
+            <div class="card exam-directory-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <span class="pill-badge pill-info" style="font-size: 12px; font-weight: 700;">
+                            {{ exam.exam_code }}
+                        </span>
+                        <span class="pill-badge pill-neutral" style="font-size: 11px;">
+                            {{ exam.category }}
+                        </span>
+                    </div>
+
+                    <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
+                        {{ exam.exam_name }}
+                    </h3>
+
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--primary); font-weight: 600; margin-bottom: 14px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        <span>{{ exam.conducting_authority }}</span>
+                    </div>
+
+                    <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.45;">
+                        <strong style="color: var(--text-primary);">Eligibility Overview:</strong>
+                        <p style="margin-top: 3px;">{{ exam.eligibility_summary }}</p>
+                    </div>
+
+                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #475569; margin-bottom: 18px;">
+                        <strong>Advisory:</strong> {{ exam.official_notification_note }}
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--border-color); gap: 10px;">
+                    <span style="font-size: 11.5px; color: #15803d; font-weight: 600;">
+                        ✓ {{ exam.verification_status }} ({{ exam.last_verified_date }})
+                    </span>
+                    <a href="{{ exam.official_portal_url }}"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="btn btn-outline btn-sm"
+                       style="display: inline-flex; align-items: center; gap: 4px;">
+                        <span>Official Portal</span>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="card empty-state" style="grid-column: 1 / -1; padding: 48px;">
+                <p>No exams found matching "<strong>{{ search_query }}</strong>"{% if selected_category and selected_category != 'All' %} in {{ selected_category }}{% endif %}.</p>
+                <p class="text-muted-sm">Try broadening your search keywords or clearing filters.</p>
+                <a href="{{ url_for('explore_exams_view') }}" class="btn btn-primary btn-sm" style="margin-top: 10px;">View All Verified Exams</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
