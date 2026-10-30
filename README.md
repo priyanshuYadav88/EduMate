@@ -46,12 +46,17 @@ For college project viva and examiner evaluation, pre-seeded database accounts a
 
 ## ⚡ Quick Start & Running Locally
 
-### 1. Initialize & Seed Database
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Initialize & Seed Database
 ```bash
 python3 seed.py
 ```
 
-### 2. Start Flask Server
+### 3. Start Flask Server
 ```bash
 python3 app.py
 ```
@@ -60,7 +65,7 @@ Open your browser and navigate to:
 http://127.0.0.1:5000
 ```
 
-### 3. Run Automated Tests
+### 4. Run Automated Tests
 ```bash
 python3 test_app.py
 ```

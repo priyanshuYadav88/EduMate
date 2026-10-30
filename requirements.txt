@@ -1,0 +1,7 @@
+# EduMate — Academic Study Planner Web Application
+# Core Application Dependencies
+
+Flask>=3.1.0
+Flask-SQLAlchemy>=3.1.0
+Flask-Login>=0.6.3
+Werkzeug>=3.1.0
