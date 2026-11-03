@@ -80,16 +80,55 @@ Unit 2: Hierarchical Structures
     </div>
 
     {% if selected_plan %}
-        <!-- Roadmap Summary Card -->
-        <div class="card" style="margin-bottom: 20px;">
-            <div class="admin-header-row" style="margin-bottom: 14px;">
+        <!-- Next Topic & Continuation Banner -->
+        <div class="card next-topic-card" id="nextTopicBanner" style="background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border: 1.5px solid #bfdbfe; margin-bottom: 22px; padding: 18px 22px; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;">
+                <div style="display: flex; align-items: center; gap: 14px; min-width: 0;">
+                    <div style="width: 44px; height: 44px; border-radius: 10px; background: #2563eb; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: white;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    </div>
+                    <div style="min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="pill-badge pill-info" style="font-size: 11px; font-weight: 700; text-transform: uppercase;">Study Focus</span>
+                            <span class="text-muted-sm" id="nextTopicSubtext">
+                                {% if next_topic %}Day {{ next_topic.day_number }} &bull; {{ next_topic.unit_name }}{% else %}Up to date{% endif %}
+                            </span>
+                        </div>
+                        <h3 id="nextTopicTitle" style="font-size: 16px; font-weight: 700; color: #1e293b; margin-top: 2px; word-break: break-word;">
+                            {% if next_topic %}
+                                Next Topic: {{ next_topic.topic_title }}
+                            {% elif selected_plan.progress_percentage == 100 %}
+                                🎉 Congratulations! You have completed all topics in this roadmap!
+                            {% else %}
+                                All today's topics completed! Ready for your next scheduled milestone.
+                            {% endif %}
+                        </h3>
+                    </div>
+                </div>
+                <div id="nextTopicActionWrap">
+                    {% if next_topic %}
+                    <button type="button" class="btn btn-primary" onclick="openStudyModal({{ next_topic.id }})" style="box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);">
+                        <span>Continue Learning</span>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 6px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Roadmap Header & Progress Summary Card -->
+        <div class="card" style="margin-bottom: 22px;">
+            <div class="admin-header-row" style="margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
                 <div>
-                    <h2 class="card-title" style="font-size: 18px;">{{ selected_plan.title }}</h2>
+                    <h2 class="card-title" style="font-size: 19px; display: flex; align-items: center; gap: 8px;">
+                        <span>{{ selected_plan.title }}</span>
+                        <span class="pill-badge pill-neutral" style="font-size: 12px;">{{ selected_plan.subject.code }}</span>
+                    </h2>
                     <span class="text-muted-sm">
-                        Subject: <strong>{{ selected_plan.subject.name }}</strong> ({{ selected_plan.subject.code }}) &bull; Target Exam: {{ selected_plan.exam_date.strftime('%d %b %Y') }}
+                        Subject: <strong>{{ selected_plan.subject.name }}</strong> &bull; Target Exam: <strong>{{ selected_plan.exam_date.strftime('%d %b %Y') }}</strong>
                     </span>
                 </div>
-                <div class="plan-selector-wrap">
+                <div class="plan-selector-wrap" style="display: flex; gap: 10px; align-items: center;">
                     {% if plans|length > 1 %}
                     <select onchange="window.location.href='/roadmap?plan_id=' + this.value;" class="form-control" style="width: auto; display: inline-block;">
                         {% for p in plans %}
@@ -99,17 +138,69 @@ Unit 2: Hierarchical Structures
                         {% endfor %}
                     </select>
                     {% endif %}
+                    <button class="btn btn-outline btn-sm" onclick="toggleRoadmapForm()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        Adjust Plan
+                    </button>
                 </div>
             </div>
 
             {% if selected_plan.has_workload_warning %}
             <div class="alert alert-warning" style="margin-bottom: 16px;">
-                <span>⚠️ <strong>Workload Warning:</strong> The syllabus volume exceeds standard pacing for the remaining time. Study blocks have been compressed. Consider devoting extra time on weekends or focusing on high-weight units.</span>
+                <span>⚠️ <strong>Workload Warning:</strong> Syllabus volume exceeds standard pacing for the remaining time. Study blocks have been compressed. Consider allocating extra weekend sessions or focusing on core units.</span>
             </div>
             {% endif %}
 
             <!-- Stat Row for Roadmap Progress -->
-            <div class="stats-grid" style="margin-bottom: 10px;">
+            <div class="stats-grid" style="margin-bottom: 8px;">
+                <!-- 1. Overall Completion -->
+                <div class="stat-card">
+                    <div class="stat-icon-wrapper bg-green-subtle">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    </div>
+                    <div class="stat-info" style="width: 100%;">
+                        <span class="stat-label">Overall Completion</span>
+                        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                            <span class="stat-value" id="roadmapPercentLabel">{{ selected_plan.progress_percentage }}%</span>
+                            <span class="text-muted-sm" id="roadmapCounter" style="font-weight: 600;">{{ selected_plan.completed_topics_count }}/{{ selected_plan.total_topics_count }} Topics</span>
+                        </div>
+                        <div class="stat-progress-bar-wrap">
+                            <div class="stat-progress-bar" id="roadmapProgressBar" style="width: {{ selected_plan.progress_percentage }}%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Daily Study Progress -->
+                <div class="stat-card">
+                    <div class="stat-icon-wrapper bg-blue-subtle">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <div class="stat-info" style="width: 100%;">
+                        <span class="stat-label">Today's Study Progress</span>
+                        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                            <span class="stat-value" id="todayProgressLabel">
+                                {% if today_total_count > 0 %}
+                                    {{ today_completed_count }}/{{ today_total_count }}
+                                {% else %}
+                                    0/0
+                                {% endif %}
+                            </span>
+                            <span class="text-muted-sm" id="todayPercentLabel" style="font-weight: 600;">
+                                {% if today_total_count > 0 %}
+                                    {{ ((today_completed_count / today_total_count) * 100)|round|int }}%
+                                {% else %}
+                                    Off Day
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="stat-progress-bar-wrap">
+                            {% set today_pct = (((today_completed_count / today_total_count) * 100)|round|int) if today_total_count > 0 else 0 %}
+                            <div class="stat-progress-bar" id="todayProgressBar" style="width: {{ today_pct }}%; background-color: #2563eb;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Days to Exam -->
                 <div class="stat-card">
                     <div class="stat-icon-wrapper bg-pink-subtle">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -117,82 +208,154 @@ Unit 2: Hierarchical Structures
                     <div class="stat-info">
                         <span class="stat-label">Days to Exam</span>
                         <span class="stat-value">{{ selected_plan.days_remaining }} days</span>
-                        <span class="stat-footnote">Deadline: {{ selected_plan.exam_date.strftime('%a, %d %b') }}</span>
+                        <span class="stat-footnote">Exam: {{ selected_plan.exam_date.strftime('%a, %d %b') }}</span>
                     </div>
                 </div>
 
-                <div class="stat-card">
-                    <div class="stat-icon-wrapper bg-blue-subtle">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-label">Daily Study Goal</span>
-                        <span class="stat-value">{{ selected_plan.daily_study_hours }} hrs/day</span>
-                        <span class="stat-footnote">Dedicated session</span>
-                    </div>
-                </div>
-
+                <!-- 4. Study Pace -->
                 <div class="stat-card">
                     <div class="stat-icon-wrapper bg-purple-subtle">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/></svg>
                     </div>
                     <div class="stat-info">
-                        <span class="stat-label">Roadmap Milestones</span>
-                        <span class="stat-value" id="roadmapCounter">{{ selected_plan.completed_topics_count }}/{{ selected_plan.total_topics_count }}</span>
-                        <span class="stat-footnote">Modules scheduled</span>
-                    </div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-icon-wrapper bg-green-subtle">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-label">Plan Completion</span>
-                        <span class="stat-value" id="roadmapPercentLabel">{{ selected_plan.progress_percentage }}%</span>
-                        <div class="stat-progress-bar-wrap">
-                            <div class="stat-progress-bar" id="roadmapProgressBar" style="width: {{ selected_plan.progress_percentage }}%;"></div>
-                        </div>
+                        <span class="stat-label">Target Pace</span>
+                        <span class="stat-value">{{ selected_plan.daily_study_hours }} hrs/day</span>
+                        <span class="stat-footnote">Active study cadence</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Day-Wise Study Timeline Checklist -->
-        <div class="card">
-            <div class="card-header">
-                <h2 class="card-title">Daily Study Schedule & Checklist</h2>
-                <span class="text-muted-sm">{{ selected_plan.items|length }} Scheduled Days</span>
+        <!-- Today's Study Focus Section (Prominent) -->
+        <div class="card" style="margin-bottom: 22px; border-left: 4px solid #2563eb;">
+            <div class="card-header" style="margin-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #2563eb; animation: pulse 2s infinite;"></div>
+                    <h2 class="card-title" style="font-size: 17px;">Today's Study Schedule &bull; {{ today.strftime('%A, %d %b %Y') }}</h2>
+                </div>
+                <span class="pill-badge pill-info">{{ today_items|length }} Session{{ 's' if today_items|length != 1 }} Scheduled</span>
             </div>
 
+            {% if today_items %}
+                <div class="roadmap-items-list">
+                    {% for item in today_items %}
+                    <div class="roadmap-item-row {% if item.is_completed %}completed{% endif %} {% if item.status == 'in_progress' %}in-progress-row{% endif %}"
+                         id="today-row-{{ item.id }}"
+                         style="background: #f8fafc; border: 1.5px solid {% if item.is_completed %}#cbd5e1{% elif item.status == 'in_progress' %}#93c5fd{% else %}#e2e8f0{% endif %};">
+                        <div class="roadmap-day-badge" style="background: #e0e7ff; border-color: #c7d2fe;">
+                            <span class="day-title" style="color: #4338ca;">Today</span>
+                            <span class="day-date">{{ item.estimated_hours }}h</span>
+                        </div>
+
+                        <div class="roadmap-item-body" style="cursor: pointer;" onclick="openStudyModal({{ item.id }})">
+                            <div class="roadmap-topic-details">
+                                <span class="roadmap-unit-tag">{{ item.unit_name }}</span>
+                                <span class="roadmap-topic-name" style="font-size: 15px; font-weight: 600; color: #0f172a;">{{ item.topic_title }}</span>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                            <span class="status-badge status-{{ item.status or ('completed' if item.is_completed else 'pending') }}" id="today-badge-{{ item.id }}">
+                                {{ (item.status or ('completed' if item.is_completed else 'pending'))|replace('_', ' ')|capitalize }}
+                            </span>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="openStudyModal({{ item.id }})" title="Study Topic & Notes">
+                                Study Now
+                            </button>
+                            <button type="button"
+                                    class="btn btn-sm {% if item.is_completed %}btn-outline{% else %}btn-primary{% endif %}"
+                                    id="today-toggle-btn-{{ item.id }}"
+                                    onclick="toggleRoadmapItem({{ item.id }})">
+                                {{ 'Completed ✓' if item.is_completed else 'Mark Done' }}
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div style="padding: 18px 20px; background: #f8fafc; border-radius: var(--radius-md); text-align: center; color: var(--text-secondary);">
+                    <p style="margin: 0; font-size: 13.5px;">
+                        ☕ <strong>No study sessions scheduled for today.</strong> Use this time to rest, review previous notes, or jump ahead to upcoming topics below!
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Full Daily Study Schedule & Checklist Card -->
+        <div class="card">
+            <div class="card-header" style="flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                <div>
+                    <h2 class="card-title">All Scheduled Topics &amp; Timeline</h2>
+                    <span class="text-muted-sm">{{ selected_plan.items|length }} Total Days Allocated</span>
+                </div>
+
+                <!-- Interactive Filter Tabs -->
+                <div class="filter-tabs-wrap" style="display: flex; gap: 6px; background: #f1f5f9; padding: 4px; border-radius: 8px;">
+                    <button type="button" class="tab-btn active" id="tab-all" onclick="filterRoadmapTab('all')">
+                        All ({{ selected_plan.items|length }})
+                    </button>
+                    <button type="button" class="tab-btn" id="tab-pending" onclick="filterRoadmapTab('pending')">
+                        Pending (<span id="tabCountPending">{{ pending_items|length }}</span>)
+                    </button>
+                    <button type="button" class="tab-btn" id="tab-in-progress" onclick="filterRoadmapTab('in_progress')">
+                        In Progress (<span id="tabCountInProgress">{{ in_progress_items|length }}</span>)
+                    </button>
+                    <button type="button" class="tab-btn" id="tab-completed" onclick="filterRoadmapTab('completed')">
+                        Completed (<span id="tabCountCompleted">{{ completed_items|length }}</span>)
+                    </button>
+                </div>
+            </div>
+
+            <!-- List of Roadmap Items -->
             <div class="roadmap-items-list" id="roadmapItemsContainer">
                 {% for item in selected_plan.items %}
-                <div class="roadmap-item-row {% if item.is_completed %}completed{% endif %} {% if item.is_revision %}revision-row{% endif %}" id="roadmap-row-{{ item.id }}">
+                {% set item_status = item.status or ('completed' if item.is_completed else 'pending') %}
+                <div class="roadmap-item-row {% if item.is_completed %}completed{% endif %} {% if item.is_revision %}revision-row{% endif %} status-filter-item"
+                     id="roadmap-row-{{ item.id }}"
+                     data-status="{{ item_status }}"
+                     data-item-id="{{ item.id }}">
                     <div class="roadmap-day-badge">
                         <span class="day-title">Day {{ item.day_number }}</span>
                         <span class="day-date">{{ item.scheduled_date.strftime('%d %b') }}</span>
                     </div>
 
                     <div class="roadmap-item-body">
-                        <label class="task-checkbox-label">
-                            <input type="checkbox"
-                                   class="task-checkbox"
-                                   {% if item.is_completed %}checked{% endif %}
-                                   onchange="toggleRoadmapItem({{ item.id }})">
-                            <span class="custom-checkbox"></span>
-                            <div class="roadmap-topic-details">
-                                <span class="roadmap-unit-tag">{{ item.unit_name }}</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label class="task-checkbox-label" style="margin: 0;" title="{{ 'Mark as Pending' if item.is_completed else 'Mark as Completed' }}">
+                                <input type="checkbox"
+                                       class="task-checkbox"
+                                       id="checkbox-{{ item.id }}"
+                                       {% if item.is_completed %}checked{% endif %}
+                                       onchange="toggleRoadmapItem({{ item.id }})">
+                                <span class="custom-checkbox"></span>
+                            </label>
+                            <div class="roadmap-topic-details" style="cursor: pointer; flex: 1;" onclick="openStudyModal({{ item.id }})">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="roadmap-unit-tag">{{ item.unit_name }}</span>
+                                    {% if item.scheduled_date == today %}
+                                    <span class="pill-badge pill-info" style="font-size: 10px; padding: 2px 6px;">Today</span>
+                                    {% elif item.scheduled_date > today %}
+                                    <span class="text-muted-sm" style="font-size: 11px;">Scheduled for {{ item.scheduled_date.strftime('%a, %d %b') }}</span>
+                                    {% endif %}
+                                </div>
                                 <span class="roadmap-topic-name">{{ item.topic_title }}</span>
                             </div>
-                        </label>
+                        </div>
                     </div>
 
-                    <div class="roadmap-item-meta">
+                    <div class="roadmap-item-meta" style="display: flex; align-items: center; gap: 10px;">
+                        <span class="status-badge status-{{ item_status }}" id="badge-{{ item.id }}">
+                            {{ item_status|replace('_', ' ')|capitalize }}
+                        </span>
+
                         {% if item.is_revision %}
                         <span class="pill-badge pill-important">Revision Buffer</span>
                         {% else %}
-                        <span class="pill-badge pill-neutral">{{ item.estimated_hours }}h session</span>
+                        <span class="pill-badge pill-neutral">{{ item.estimated_hours }}h</span>
                         {% endif %}
+
+                        <button type="button" class="btn btn-outline btn-sm" onclick="openStudyModal({{ item.id }})" title="Study Topic & Notes">
+                            Study
+                        </button>
                     </div>
                 </div>
                 {% endfor %}
@@ -211,10 +374,132 @@ Unit 2: Hierarchical Structures
         </div>
     {% endif %}
 </div>
+
+<!-- =========================================================================
+     DEDICATED STUDY TOPIC MODAL
+     ========================================================================= -->
+<div class="modal-backdrop" id="studyTopicModal" style="display: none;">
+    <div class="modal-box" style="max-width: 680px; max-height: 90vh; display: flex; flex-direction: column;">
+        <!-- Modal Header -->
+        <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 14px; margin-bottom: 14px;">
+            <div>
+                <span class="pill-badge pill-neutral" id="modalUnitTag" style="margin-bottom: 4px; display: inline-block;">Unit 1</span>
+                <h3 class="card-title" id="modalTopicTitle" style="font-size: 18px; margin: 0; word-break: break-word;">Topic Title</h3>
+                <span class="text-muted-sm" id="modalSubjectMeta">Subject Name &bull; Scheduled Date</span>
+            </div>
+            <button type="button" class="modal-close-btn" onclick="closeStudyModal()">&times;</button>
+        </div>
+
+        <!-- Modal Body (Scrollable) -->
+        <div style="flex: 1; overflow-y: auto; padding-right: 4px;">
+            <!-- Subtopics List -->
+            <div id="modalSubtopicsWrap" style="margin-bottom: 16px; display: none;">
+                <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 6px;">Key Subtopics Covered:</div>
+                <div id="modalSubtopicsList" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+            </div>
+
+            <!-- AI Study Assistant Action Toolbar -->
+            <div class="ai-study-toolbar" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-md); padding: 12px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
+                    <span style="font-size: 12.5px; font-weight: 700; color: #1e293b;">AI Study Assistant Tools:</span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    <button type="button" class="btn btn-outline btn-sm ai-tool-btn" onclick="triggerAIContent('explain')">💡 Explain Concept</button>
+                    <button type="button" class="btn btn-outline btn-sm ai-tool-btn" onclick="triggerAIContent('short_notes')">📝 Short Notes</button>
+                    <button type="button" class="btn btn-outline btn-sm ai-tool-btn" onclick="triggerAIContent('concept')">🔍 Examples &amp; Analogy</button>
+                    <button type="button" class="btn btn-outline btn-sm ai-tool-btn" onclick="triggerAIContent('practice')">✍️ Practice Questions</button>
+                    <button type="button" class="btn btn-outline btn-sm ai-tool-btn" onclick="triggerAIContent('summary')">⚡ Quick Revision</button>
+                </div>
+            </div>
+
+            <!-- Content Area (Notes / AI Output) -->
+            <div id="modalContentLoading" style="display: none; text-align: center; padding: 30px;">
+                <div class="spinner" style="margin: 0 auto 10px auto; width: 28px; height: 28px; border: 3px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                <span class="text-muted-sm" id="modalLoadingText">Generating educational study material...</span>
+            </div>
+
+            <div id="modalContentDisplay" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; font-size: 14px; line-height: 1.6; min-height: 120px; white-space: pre-wrap; word-break: break-word;">
+                Click any of the AI study tools above to generate notes, clear conceptual explanations, or practice questions for this topic.
+            </div>
+        </div>
+
+        <!-- Modal Footer Actions -->
+        <div class="modal-actions" style="border-top: 1px solid var(--border-color); padding-top: 14px; margin-top: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 13px; color: var(--text-secondary);">Topic Status:</span>
+                <span class="status-badge" id="modalStatusBadge">Pending</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-outline btn-sm" id="modalBtnInProgress" onclick="setTopicStatusFromModal('in_progress')">
+                    Mark In Progress
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" id="modalBtnToggleComplete" onclick="setTopicStatusFromModal('toggle')">
+                    Mark as Completed ✓
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="closeStudyModal()">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
+<style>
+.tab-btn {
+    border: none;
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.tab-btn:hover {
+    color: var(--text-primary);
+}
+.tab-btn.active {
+    background: #ffffff;
+    color: var(--primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.status-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11.5px;
+    font-weight: 600;
+}
+.status-badge.status-completed {
+    background-color: #dcfce7;
+    color: #15803d;
+}
+.status-badge.status-in_progress, .status-badge.status-in-progress {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+.status-badge.status-pending {
+    background-color: #f1f5f9;
+    color: #64748b;
+}
+.in-progress-row {
+    border-left: 4px solid #3b82f6 !important;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.15); }
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+</style>
+
 <script>
+let currentActiveModalItemId = null;
+let currentModalTopicId = null;
+
 function toggleRoadmapForm() {
     const card = document.getElementById('roadmapFormCard');
     if (card) {
@@ -225,9 +510,60 @@ function toggleRoadmapForm() {
     }
 }
 
+// Filter Tab Handler
+function filterRoadmapTab(filter) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    const activeTab = document.getElementById(`tab-${filter.replace('_', '-')}`);
+    if (activeTab) activeTab.classList.add('active');
+
+    const rows = document.querySelectorAll('.status-filter-item');
+    rows.forEach(row => {
+        const rowStatus = row.getAttribute('data-status');
+        const isCompleted = row.classList.contains('completed');
+
+        if (filter === 'all') {
+            row.style.display = 'flex';
+        } else if (filter === 'completed') {
+            row.style.display = (rowStatus === 'completed' || isCompleted) ? 'flex' : 'none';
+        } else if (filter === 'in_progress') {
+            row.style.display = (rowStatus === 'in_progress') ? 'flex' : 'none';
+        } else if (filter === 'pending') {
+            row.style.display = (rowStatus === 'pending' && !isCompleted) ? 'flex' : 'none';
+        }
+    });
+}
+
+// Recalculate tab badge counts from current DOM state
+function refreshTabCounts() {
+    const rows = document.querySelectorAll('.status-filter-item');
+    let pending = 0, inProgress = 0, completed = 0;
+
+    rows.forEach(row => {
+        const st = row.getAttribute('data-status');
+        if (st === 'completed' || row.classList.contains('completed')) {
+            completed++;
+        } else if (st === 'in_progress') {
+            inProgress++;
+        } else {
+            pending++;
+        }
+    });
+
+    const cP = document.getElementById('tabCountPending');
+    const cIP = document.getElementById('tabCountInProgress');
+    const cC = document.getElementById('tabCountCompleted');
+    if (cP) cP.innerText = pending;
+    if (cIP) cIP.innerText = inProgress;
+    if (cC) cC.innerText = completed;
+}
+
+// Primary Toggle Function
 async function toggleRoadmapItem(itemId) {
     const row = document.getElementById(`roadmap-row-${itemId}`);
-    const checkbox = row.querySelector('.task-checkbox');
+    const checkbox = document.getElementById(`checkbox-${itemId}`);
+    const badge = document.getElementById(`badge-${itemId}`);
+    const todayToggleBtn = document.getElementById(`today-toggle-btn-${itemId}`);
+    const todayBadge = document.getElementById(`today-badge-${itemId}`);
 
     try {
         const response = await fetch(`/api/roadmap/toggle/${itemId}`, {
@@ -235,33 +571,305 @@ async function toggleRoadmapItem(itemId) {
             headers: { 'Content-Type': 'application/json' }
         });
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+            const errJson = await response.json().catch(() => ({}));
+            throw new Error(errJson.error || `HTTP ${response.status}`);
+        }
 
         const data = await response.json();
         if (data.success) {
-            if (data.is_completed) {
-                row.classList.add('completed');
-            } else {
-                row.classList.remove('completed');
+            // Update row styling
+            if (row) {
+                if (data.is_completed) {
+                    row.classList.add('completed');
+                    row.setAttribute('data-status', 'completed');
+                } else {
+                    row.classList.remove('completed');
+                    row.setAttribute('data-status', data.status || 'pending');
+                }
             }
 
-            // Update stats dynamically without page reload
+            // Sync checkbox
+            if (checkbox) checkbox.checked = data.is_completed;
+
+            // Sync status badge
+            const statusLabel = (data.status || 'pending').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            if (badge) {
+                badge.className = `status-badge status-${data.status}`;
+                badge.innerText = statusLabel;
+            }
+
+            // Sync today's focus row if present
+            if (todayBadge) {
+                todayBadge.className = `status-badge status-${data.status}`;
+                todayBadge.innerText = statusLabel;
+            }
+            if (todayToggleBtn) {
+                todayToggleBtn.innerText = data.is_completed ? 'Completed ✓' : 'Mark Done';
+                todayToggleBtn.className = data.is_completed ? 'btn btn-outline btn-sm' : 'btn btn-primary btn-sm';
+            }
+
+            // Update stats dynamically without reload
             const counter = document.getElementById('roadmapCounter');
             const percentLabel = document.getElementById('roadmapPercentLabel');
             const progressBar = document.getElementById('roadmapProgressBar');
 
-            if (counter) counter.innerText = `${data.completed_count}/${data.total_count}`;
+            if (counter) counter.innerText = `${data.completed_count}/${data.total_count} Topics`;
             if (percentLabel) percentLabel.innerText = `${data.progress_percentage}%`;
             if (progressBar) progressBar.style.width = `${data.progress_percentage}%`;
+
+            // Update next topic banner
+            updateNextTopicBanner(data.next_item, data.all_today_completed, data.progress_percentage);
+            refreshTabCounts();
+
+            // Sync modal if currently open for this item
+            if (currentActiveModalItemId === itemId) {
+                syncModalStatusUI(data.status, data.is_completed);
+            }
         } else {
-            checkbox.checked = !checkbox.checked;
-            alert(data.error || 'Failed to update item.');
+            if (checkbox) checkbox.checked = !checkbox.checked;
+            alert(data.error || 'Failed to update topic status.');
         }
     } catch (err) {
         console.error('Error toggling roadmap item:', err);
-        checkbox.checked = !checkbox.checked;
-        alert('Server connection error. Please try again.');
+        if (checkbox) checkbox.checked = !checkbox.checked;
+        alert('Action failed: ' + (err.message || 'Connection error.'));
     }
 }
+
+// Update Next Topic Banner UI
+function updateNextTopicBanner(nextItem, allTodayCompleted, progressPercentage) {
+    const banner = document.getElementById('nextTopicBanner');
+    const titleEl = document.getElementById('nextTopicTitle');
+    const subtextEl = document.getElementById('nextTopicSubtext');
+    const actionWrap = document.getElementById('nextTopicActionWrap');
+
+    if (!banner || !titleEl) return;
+
+    if (progressPercentage >= 100) {
+        titleEl.innerText = "🎉 Incredible achievement! You have completed all topics in this roadmap!";
+        if (subtextEl) subtextEl.innerText = "Curriculum 100% Completed";
+        if (actionWrap) actionWrap.innerHTML = `<span class="pill-badge pill-completed" style="font-size: 13px; padding: 6px 14px;">All Completed ✓</span>`;
+        return;
+    }
+
+    if (nextItem) {
+        if (allTodayCompleted) {
+            titleEl.innerHTML = `Great work! All today's tasks done. Next scheduled topic is: <strong>${nextItem.topic_title}</strong>`;
+            if (subtextEl) subtextEl.innerText = `Day ${nextItem.day_number} &bull; ${nextItem.unit_name} &bull; ${nextItem.scheduled_date}`;
+        } else {
+            titleEl.innerHTML = `Next Topic: <strong>${nextItem.topic_title}</strong>`;
+            if (subtextEl) subtextEl.innerText = `Day ${nextItem.day_number} &bull; ${nextItem.unit_name}`;
+        }
+
+        if (actionWrap) {
+            actionWrap.innerHTML = `
+                <button type="button" class="btn btn-primary" onclick="openStudyModal(${nextItem.id})" style="box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);">
+                    <span>Continue Learning</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 6px;"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
+            `;
+        }
+    }
+}
+
+// Open Dedicated Study Topic Modal
+async function openStudyModal(itemId) {
+    currentActiveModalItemId = itemId;
+    const modal = document.getElementById('studyTopicModal');
+    if (!modal) return;
+
+    modal.style.display = 'flex';
+    document.getElementById('modalContentLoading').style.display = 'block';
+    document.getElementById('modalContentDisplay').style.display = 'none';
+
+    try {
+        const resp = await fetch(`/api/roadmap/item/${itemId}/details`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        if (data.success) {
+            const item = data.item;
+            const topic = data.topic;
+            const subject = data.subject;
+
+            currentModalTopicId = topic.id;
+
+            document.getElementById('modalUnitTag').innerText = item.unit_name || 'Unit 1';
+            document.getElementById('modalTopicTitle').innerText = item.topic_title;
+            document.getElementById('modalSubjectMeta').innerText = `${subject.name} (${subject.code}) &bull; Scheduled for ${item.scheduled_date} (${item.estimated_hours}h session)`;
+
+            // Subtopics badges
+            const subtopicsWrap = document.getElementById('modalSubtopicsWrap');
+            const subtopicsList = document.getElementById('modalSubtopicsList');
+            if (topic && topic.subtopics && topic.subtopics.length > 0) {
+                subtopicsWrap.style.display = 'block';
+                subtopicsList.innerHTML = topic.subtopics.map(s => `<span class="pill-badge pill-neutral" style="font-size: 11.5px;">${s}</span>`).join('');
+            } else {
+                subtopicsWrap.style.display = 'none';
+            }
+
+            // Initial content
+            const contentDisplay = document.getElementById('modalContentDisplay');
+            if (topic && topic.notes_preview) {
+                contentDisplay.innerText = topic.notes_preview;
+            } else {
+                contentDisplay.innerText = `Topic: ${item.topic_title}\n\nSelect any AI Study Assistant tool above to generate comprehensive notes, simplified explanations, examples, or exam practice problems for this topic.`;
+            }
+
+            syncModalStatusUI(item.status, item.is_completed);
+        }
+    } catch (err) {
+        console.error('Failed to load item details:', err);
+        document.getElementById('modalContentDisplay').innerText = 'Could not load topic details from server.';
+    } finally {
+        document.getElementById('modalContentLoading').style.display = 'none';
+        document.getElementById('modalContentDisplay').style.display = 'block';
+    }
+}
+
+function syncModalStatusUI(status, isCompleted) {
+    const badge = document.getElementById('modalStatusBadge');
+    const btnToggle = document.getElementById('modalBtnToggleComplete');
+    const btnInProg = document.getElementById('modalBtnInProgress');
+
+    const st = status || (isCompleted ? 'completed' : 'pending');
+    if (badge) {
+        badge.className = `status-badge status-${st}`;
+        badge.innerText = st.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    if (btnToggle) {
+        if (isCompleted || st === 'completed') {
+            btnToggle.innerText = 'Mark as Pending';
+            btnToggle.className = 'btn btn-outline btn-sm';
+        } else {
+            btnToggle.innerText = 'Mark as Completed ✓';
+            btnToggle.className = 'btn btn-primary btn-sm';
+        }
+    }
+
+    if (btnInProg) {
+        if (st === 'in_progress') {
+            btnInProg.style.display = 'none';
+        } else {
+            btnInProg.style.display = 'inline-block';
+        }
+    }
+}
+
+async function setTopicStatusFromModal(action) {
+    if (!currentActiveModalItemId) return;
+
+    if (action === 'toggle') {
+        await toggleRoadmapItem(currentActiveModalItemId);
+    } else if (action === 'in_progress') {
+        try {
+            const resp = await fetch(`/api/roadmap/item/${currentActiveModalItemId}/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'in_progress' })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                // Update row styling
+                const row = document.getElementById(`roadmap-row-${currentActiveModalItemId}`);
+                if (row) {
+                    row.classList.remove('completed');
+                    row.classList.add('in-progress-row');
+                    row.setAttribute('data-status', 'in_progress');
+                }
+                const chk = document.getElementById(`checkbox-${currentActiveModalItemId}`);
+                if (chk) chk.checked = false;
+
+                const badge = document.getElementById(`badge-${currentActiveModalItemId}`);
+                if (badge) {
+                    badge.className = 'status-badge status-in_progress';
+                    badge.innerText = 'In Progress';
+                }
+
+                syncModalStatusUI('in_progress', false);
+                refreshTabCounts();
+            } else {
+                alert(data.error || 'Failed to update status.');
+            }
+        } catch (e) {
+            alert('Request failed: ' + e.message);
+        }
+    }
+}
+
+function closeStudyModal() {
+    const modal = document.getElementById('studyTopicModal');
+    if (modal) modal.style.display = 'none';
+    currentActiveModalItemId = null;
+    currentModalTopicId = null;
+}
+
+// Generate Academic Content via AI from Modal
+async function triggerAIContent(contentType) {
+    if (!currentModalTopicId) {
+        alert('This topic is not directly linked to a syllabus topic yet. Please mark it from the My Subjects view.');
+        return;
+    }
+
+    const loadingEl = document.getElementById('modalContentLoading');
+    const displayEl = document.getElementById('modalContentDisplay');
+    const loadingText = document.getElementById('modalLoadingText');
+
+    const labels = {
+        'explain': 'Simplifying concept and finding intuitive analogies...',
+        'short_notes': 'Synthesizing concise high-yield revision notes...',
+        'concept': 'Generating detailed concept explanation with real-world examples...',
+        'practice': 'Crafting university examination practice questions & solutions...',
+        'summary': 'Creating fast revision summary sheet...'
+    };
+    if (loadingText) loadingText.innerText = labels[contentType] || 'Generating study content...';
+
+    loadingEl.style.display = 'block';
+    displayEl.style.display = 'none';
+
+    try {
+        const resp = await fetch('/api/ai/academic-content', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                topic_id: currentModalTopicId,
+                content_type: contentType
+            })
+        });
+
+        const data = await resp.json();
+        if (data.success && data.content) {
+            displayEl.innerText = data.content;
+        } else if (data.questions) {
+            // Render practice questions cleanly
+            let qText = "PRACTICE EXAMINATION QUESTIONS:\n\n";
+            data.questions.forEach((q, idx) => {
+                qText += `Q${idx + 1}. ${q.question}\n`;
+                if (q.options) {
+                    q.options.forEach(opt => { qText += `   ${opt}\n`; });
+                }
+                qText += `   → Answer: Option ${q.correct_answer + 1}\n   → Explanation: ${q.explanation}\n\n`;
+            });
+            displayEl.innerText = qText;
+        } else {
+            displayEl.innerText = data.error || data.reply || 'AI Service returned no content.';
+        }
+    } catch (e) {
+        displayEl.innerText = 'Failed to generate content: ' + e.message;
+    } finally {
+        loadingEl.style.display = 'none';
+        displayEl.style.display = 'block';
+    }
+}
+
+// Close modal on backdrop click
+window.addEventListener('click', function(e) {
+    const modal = document.getElementById('studyTopicModal');
+    if (e.target === modal) {
+        closeStudyModal();
+    }
+});
 </script>
 {% endblock %}

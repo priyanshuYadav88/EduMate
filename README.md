@@ -6,6 +6,10 @@ EduMate is a full-stack academic study planning web application developed with P
 
 ## 🚀 Key Features
 
+* **Subject Management & Coursework Tracking:** Real SQLite subject creation with duplicate name and code prevention, custom color coding, icon badges, and live topic completion bars.
+* **Syllabus PDF Upload & Topic Extraction:** Students can upload official syllabus PDF files; text is parsed securely (`pypdf`), units and topics are automatically recognized, and students can review, edit, and save them directly into their subjects for study planning.
+* **Scanned & Password-Protected PDF Validation:** Detects encrypted PDFs, corrupted files, and scanned image-only documents with honest notices about OCR availability instead of silent failures.
+* **Dynamic Database Dropdowns:** All subject selectors across Roadmap, Task Creation, and Syllabus Upload fetch live coursework dynamically via `/api/subjects`.
 * **Real Database Metrics (No Fake Data):** Every percentage, subject count, task counter, and exam countdown is dynamically calculated from actual database records.
 * **Authentication & Role-Based Authorization:** Secure student registration, password hashing (`werkzeug.security`), session handling (`Flask-Login`), and strict server-side role separation (`student` vs `admin`).
 * **Standalone Centered Authentication Pages:** Clean, dedicated auth layout for login and registration without rendering authenticated dashboard elements.
@@ -24,6 +28,7 @@ EduMate is a full-stack academic study planning web application developed with P
 | Layer | Technologies |
 | :--- | :--- |
 | **Backend** | Python 3, Flask 3.1, Werkzeug |
+| **PDF Processing** | pypdf |
 | **Database & ORM** | SQLite 3, Flask-SQLAlchemy |
 | **Authentication** | Flask-Login, Werkzeug Password Hashing |
 | **Frontend** | Semantic HTML5, Custom CSS3 Design System, Vanilla JavaScript (ES6) |
@@ -84,6 +89,9 @@ User (id, username, email, password_hash, role, is_active, created_at)
   │     └── RoadmapPlan (id, user_id, subject_id, title, exam_date, daily_hours, workload_warning)
   │           └── RoadmapItem (id, plan_id, day_number, scheduled_date, unit_name, topic_title, is_completed, is_revision)
   │
+  ├── UploadedPdfDocument (id, user_id, subject_id, filename, file_size_bytes, status, extracted_text, error_message, topics_count)
+  ├── AuditLog (id, admin_id, admin_username, action, target_type, target_id, details, ip_address, created_at)
+  ├── SystemSetting (id, key, value, description, updated_at)
   └── OfficialExamDirectory (id, exam_code, exam_name, authority, category, eligibility, official_url)
 ```
 
@@ -102,11 +110,17 @@ User (id, username, email, password_hash, role, is_active, created_at)
 3. **How does the Syllabus-to-Study-Roadmap Generator distribute topics?**
    * *Answer:* The algorithm in `app.py` computes total days until the exam (`(exam_date - today).days`). It allocates the final 15-20% of available days exclusively as revision and mock question buffers. The remaining days are study days where syllabus topics are distributed sequentially. If total estimated topic hours exceed available hours, it triggers a non-blocking workload warning.
 
-4. **Why are external exams linked directly to official authority portals rather than relying solely on scraping?**
-   * *Answer:* Exam dates, fees, and syllabus patterns change between cycles. Web scraping can break or display stale information. EduMate maintains a verified directory of official authority portals (IITs for GATE/JEE, IIMs for CAT, UPSC, NTA) to guarantee authentic, official information.
+4. **How does the Syllabus PDF upload and extraction feature work?**
+   * *Answer:* When a student uploads a PDF, the backend receives the file stream and uses `pypdf.PdfReader` to extract textual content across pages. It checks for encryption (`reader.is_encrypted`), corrupt files, and scanned image documents. If text is extracted, a regex parser identifies units (e.g. "Unit 1", "Module 2") and cleans bullets/numbering into topic titles. The user can review, edit, or delete items on the frontend before confirming the save to SQLite.
 
-5. **How are the dashboard statistics calculated?**
-   * *Answer:* Statistics are computed dynamically during each request in `app.py`:
+5. **How does the Admin Control Center maintain system security and data integrity?**
+   * *Answer:* The Admin Control Center enforces strict server-side Role-Based Access Control (`@admin_required`), returning `403 Forbidden` if a student attempts access. It features administrative safeguards: administrators cannot accidentally delete or deactivate their own logged-in account, nor can they demote the last active administrator. Furthermore, all sensitive administrative operations (role changes, deletions, password resets) are recorded in the `audit_logs` table with timestamps and administrator usernames.
+
+6. **How does the database backup mechanism function?**
+   * *Answer:* It leverages the native SQLite Online Backup API (`sqlite3.backup()`). Rather than doing a raw file copy that could read inconsistent states during active writes, `sqlite3.backup()` creates transaction-safe snapshots directly on the server without locking or disrupting user operations.
+
+7. **How are the dashboard statistics calculated?**
+   * *Answer:* Statistics are computed dynamically during each request in `app.py` and `admin.py`:
      * Total Subjects: Query count for the logged-in user (`user_id`).
      * Syllabus Progress: Count of completed topics (`is_completed = True`) divided by total topics for that student's subjects multiplied by 100.
      * Next Exam: Earliest exam where `exam_date >= date.today()`.

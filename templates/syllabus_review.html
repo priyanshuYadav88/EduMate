@@ -1,0 +1,472 @@
+{% extends 'base.html' %}
+
+{% block title %}Review & Approve Syllabus — EduMate{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 14px; margin-bottom: 22px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                <a href="{{ url_for('subjects_view') }}" class="btn btn-outline btn-sm">&larr; Back to Subjects</a>
+                <span class="pill-badge pill-info">{{ doc.status }}</span>
+                {% if doc.ocr_applied %}
+                <span class="pill-badge pill-important">OCR Processed</span>
+                {% endif %}
+            </div>
+            <h1 class="welcome-title">Review & Approve Syllabus Topics</h1>
+            <p class="welcome-subtitle">
+                Source Document: <strong>{{ doc.filename }}</strong> &bull; {{ doc.page_count }} Pages &bull; Extracted with Intelligent Curriculum Parser
+            </p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-primary" onclick="submitApprovedSyllabus()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M20 6L9 17l-5-5"/></svg>
+                Confirm & Save Syllabus
+            </button>
+        </div>
+    </div>
+
+    <!-- Subject & Course Details Card -->
+    <div class="card" style="margin-bottom: 22px;">
+        <div class="card-header">
+            <h2 class="card-title">1. Course Details & Enrolled Subject Association</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: end;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="reviewSubjectSelect" class="form-label" style="font-weight: 600;">Link to Existing Subject:</label>
+                <select id="reviewSubjectSelect" class="form-control" onchange="handleSubjectSelectChange(this.value)">
+                    <option value="">-- Select an Enrolled Subject --</option>
+                    {% for sub in subjects %}
+                    <option value="{{ sub.id }}" {% if selected_subject_id == sub.id %}selected{% endif %}>
+                        {{ sub.name }} ({{ sub.code or 'No Code' }})
+                    </option>
+                    {% endfor %}
+                    <option value="__NEW__" {% if not selected_subject_id %}selected{% endif %}>+ Create New Subject from this Document</option>
+                </select>
+            </div>
+            <div id="newSubjectGroup" class="form-group" style="margin-bottom: 0;">
+                <label for="newSubjectName" class="form-label" style="font-weight: 600;">Subject / Course Name:</label>
+                <input type="text" id="newSubjectName" class="form-control" value="{{ detected_subject_name or 'Academic Course Syllabus' }}" placeholder="e.g. Operating Systems">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="courseCodeInput" class="form-label" style="font-weight: 600;">Course Code (if available):</label>
+                <input type="text" id="courseCodeInput" class="form-control" value="{{ detected_course_code or '' }}" placeholder="e.g. CS301, KCS-401">
+            </div>
+        </div>
+    </div>
+
+    <!-- Unassigned / Manual Review Section (Shown if ambiguous topics exist) -->
+    <div id="unassignedCard" class="card" style="margin-bottom: 22px; display: none; border-left: 4px solid #f59e0b;">
+        <div class="card-header" style="flex-wrap: wrap; gap: 8px;">
+            <div>
+                <h2 class="card-title" style="color: #b45309; display: flex; align-items: center; gap: 6px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Topics Flagged for Manual Review (<span id="unassignedCountBadge">0</span>)
+                </h2>
+                <p class="text-muted-sm" style="margin-top: 2px;">
+                    These topics were detected in the syllabus text but could not be confidently assigned to a specific unit. Please assign each to a unit or delete if irrelevant.
+                </p>
+            </div>
+        </div>
+        <div id="unassignedList" style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+            <!-- Rendered by JS -->
+        </div>
+    </div>
+
+    <!-- Syllabus Hierarchy Card -->
+    <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
+            <div>
+                <h2 class="card-title">2. Detected Curriculum Hierarchy (Units, Topics & Subtopics)</h2>
+                <p class="text-muted-sm" style="margin-top: 4px;">
+                    Preserved from original PDF text. You can edit unit titles, modify topics, add subtopics, or delete unneeded lines.
+                </p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-outline btn-sm" onclick="addNewUnitPrompt()">
+                    + Add New Unit
+                </button>
+            </div>
+        </div>
+
+        <div id="unitsContainer" style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- Rendered dynamically by JavaScript from JSON -->
+        </div>
+
+        <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+                <span id="totalTopicsCounter" style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">Total Topics: 0</span>
+                <span class="text-muted-sm" style="display: block;">These approved topics will seamlessly schedule into the Study Roadmap Generator.</span>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <a href="{{ url_for('subjects_view') }}" class="btn btn-outline">Cancel</a>
+                <button type="button" class="btn btn-primary" onclick="submitApprovedSyllabus()">
+                    Confirm & Save Syllabus
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Original Extracted Text Collapsible Drawer -->
+    <div class="card">
+        <details>
+            <summary style="cursor: pointer; font-weight: 600; font-size: 14px; color: var(--primary);">
+                View Full Extracted PDF Text (Audit Verification) &darr;
+            </summary>
+            <div style="margin-top: 14px; background-color: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; max-height: 280px; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; color: #334155;">
+{{ doc.extracted_text or 'No raw text available.' }}
+            </div>
+        </details>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let syllabusUnits = {{ units_json|safe or '[]' }};
+let unassignedTopics = {{ unassigned_topics_json|safe or '[]' }};
+const docId = {{ doc.id }};
+
+function renderSyllabus() {
+    const container = document.getElementById('unitsContainer');
+    container.innerHTML = '';
+    let totalTopics = 0;
+
+    if (!syllabusUnits || syllabusUnits.length === 0) {
+        container.innerHTML = `
+            <div style="padding: 32px; text-align: center; color: var(--text-muted); background: #f8fafc; border-radius: var(--radius-md);">
+                <p>No units found. Click "+ Add New Unit" above to add topics manually.</p>
+            </div>
+        `;
+        document.getElementById('totalTopicsCounter').textContent = `Total Topics: 0`;
+    } else {
+        syllabusUnits.forEach((unit, unitIdx) => {
+            totalTopics += (unit.topics || []).length;
+            const unitEl = document.createElement('div');
+            unitEl.style.border = '1px solid var(--border-color)';
+            unitEl.style.borderRadius = 'var(--radius-md)';
+            unitEl.style.overflow = 'hidden';
+            unitEl.style.backgroundColor = '#ffffff';
+
+            // Unit Header
+            const headerEl = document.createElement('div');
+            headerEl.style.backgroundColor = '#f8fafc';
+            headerEl.style.padding = '12px 16px';
+            headerEl.style.display = 'flex';
+            headerEl.style.justifyContent = 'space-between';
+            headerEl.style.alignItems = 'center';
+            headerEl.style.borderBottom = '1px solid var(--border-color)';
+            headerEl.style.flexWrap = 'wrap';
+            headerEl.style.gap = '8px';
+
+            headerEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 220px;">
+                    <span class="pill-badge pill-info" style="font-weight: 700;">Unit ${unit.unit_number || (unitIdx + 1)}</span>
+                    <input type="text" class="form-control" style="font-weight: 600; font-size: 14px; padding: 4px 8px; height: 32px;"
+                        value="${escapeHtml(unit.title || '')}"
+                        onchange="updateUnitTitle(${unitIdx}, this.value)"
+                        placeholder="Unit Title">
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="text-muted-sm">${(unit.topics || []).length} Topics</span>
+                    <button type="button" class="btn btn-outline btn-sm" style="padding: 4px 10px; font-size: 12px;" onclick="addTopicToUnit(${unitIdx})">
+                        + Add Topic
+                    </button>
+                    <button type="button" class="btn btn-outline btn-sm" style="padding: 4px 8px; color: #dc2626; border-color: #fca5a5;" title="Delete Unit" onclick="deleteUnit(${unitIdx})">
+                        &times;
+                    </button>
+                </div>
+            `;
+
+            // Topics List
+            const bodyEl = document.createElement('div');
+            bodyEl.style.padding = '12px 16px';
+            bodyEl.style.display = 'flex';
+            bodyEl.style.flexDirection = 'column';
+            bodyEl.style.gap = '10px';
+
+            if (!unit.topics || unit.topics.length === 0) {
+                bodyEl.innerHTML = `<span class="text-muted-sm" style="font-style: italic;">No topics in this unit yet. Click "+ Add Topic" above.</span>`;
+            } else {
+                unit.topics.forEach((topic, topicIdx) => {
+                    const topicRow = document.createElement('div');
+                    topicRow.style.display = 'flex';
+                    topicRow.style.alignItems = 'flex-start';
+                    topicRow.style.gap = '10px';
+                    topicRow.style.padding = '8px 10px';
+                    topicRow.style.backgroundColor = '#fbfcfe';
+                    topicRow.style.border = '1px solid #e2e8f0';
+                    topicRow.style.borderRadius = 'var(--radius-sm)';
+
+                    const pagesStr = Array.isArray(topic.source_pages) ? topic.source_pages.join(', ') : (topic.source_pages || 'N/A');
+                    const subtopicsList = Array.isArray(topic.subtopics) ? topic.subtopics : [];
+
+                    topicRow.innerHTML = `
+                        <div style="margin-top: 6px; color: var(--primary); font-size: 13px;">&bull;</div>
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <input type="text" class="form-control" style="font-size: 13.5px; height: 32px; flex: 1; min-width: 180px;"
+                                    value="${escapeHtml(topic.name || topic.title || '')}"
+                                    onchange="updateTopicName(${unitIdx}, ${topicIdx}, this.value)"
+                                    placeholder="Topic Title">
+                                <span class="pill-badge pill-neutral" style="font-size: 11px; white-space: nowrap;" title="Extracted from source PDF pages">
+                                    📄 Page ${escapeHtml(pagesStr)}
+                                </span>
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; align-items: center;">
+                                ${subtopicsList.map((st, stIdx) => `
+                                    <span style="display: inline-flex; align-items: center; gap: 4px; background: #e0f2fe; color: #0369a1; font-size: 11px; padding: 2px 6px; border-radius: 4px;">
+                                        ${escapeHtml(st)}
+                                        <span style="cursor: pointer; font-weight: bold;" onclick="removeSubtopic(${unitIdx}, ${topicIdx}, ${stIdx})">&times;</span>
+                                    </span>
+                                `).join('')}
+                                <button type="button" class="btn-text-link" style="font-size: 11px; color: #0369a1;" onclick="addSubtopicPrompt(${unitIdx}, ${topicIdx})">+ Subtopic</button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm" style="padding: 4px 8px; color: #ef4444; border: none; font-size: 14px;" title="Delete Topic" onclick="deleteTopic(${unitIdx}, ${topicIdx})">
+                            &times;
+                        </button>
+                    `;
+                    bodyEl.appendChild(topicRow);
+                });
+            }
+
+            unitEl.appendChild(headerEl);
+            unitEl.appendChild(bodyEl);
+            container.appendChild(unitEl);
+        });
+
+        document.getElementById('totalTopicsCounter').textContent = `Total Topics: ${totalTopics}`;
+    }
+
+    renderUnassignedTopics();
+}
+
+function renderUnassignedTopics() {
+    const card = document.getElementById('unassignedCard');
+    const list = document.getElementById('unassignedList');
+    const badge = document.getElementById('unassignedCountBadge');
+
+    if (!unassignedTopics || unassignedTopics.length === 0) {
+        card.style.display = 'none';
+        return;
+    }
+
+    card.style.display = 'block';
+    badge.textContent = unassignedTopics.length;
+    list.innerHTML = '';
+
+    unassignedTopics.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fffbeb; padding: 8px 12px; border: 1px solid #fde68a; border-radius: var(--radius-sm); flex-wrap: wrap;';
+        
+        let unitOptions = `<option value="">-- Assign to Unit... --</option>`;
+        syllabusUnits.forEach((u, uIdx) => {
+            unitOptions += `<option value="${uIdx}">${escapeHtml(u.title || ('Unit ' + (uIdx + 1)))}</option>`;
+        });
+        unitOptions += `<option value="__NEW_UNIT__">+ Create New Unit</option>`;
+
+        row.innerHTML = `
+            <div style="flex: 1; min-width: 220px;">
+                <strong style="font-size: 13.5px; color: #92400e;">${escapeHtml(item.name)}</strong>
+                <span class="text-muted-sm" style="margin-left: 6px;">(Page ${escapeHtml(Array.isArray(item.source_pages) ? item.source_pages.join(', ') : (item.source_pages || 'N/A'))})</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <select class="form-control" style="font-size: 12.5px; height: 32px; width: 190px;" onchange="assignUnassignedTopic(${idx}, this.value)">
+                    ${unitOptions}
+                </select>
+                <button type="button" class="btn btn-outline btn-sm" style="color: #ef4444; border: 1px solid #fca5a5; padding: 4px 8px;" title="Discard Topic" onclick="discardUnassignedTopic(${idx})">
+                    &times; Discard
+                </button>
+            </div>
+        `;
+        list.appendChild(row);
+    });
+}
+
+function assignUnassignedTopic(itemIdx, targetVal) {
+    if (!targetVal) return;
+    const item = unassignedTopics[itemIdx];
+    if (!item) return;
+
+    if (targetVal === '__NEW_UNIT__') {
+        const num = syllabusUnits.length + 1;
+        const newTitle = prompt(`Enter title for Unit ${num}:`, `Unit ${num}: Additional Topics`);
+        if (!newTitle) return;
+        syllabusUnits.push({
+            unit_number: num,
+            title: newTitle.trim(),
+            topics: [{
+                name: item.name,
+                subtopics: item.subtopics || [],
+                source_pages: item.source_pages || [1]
+            }]
+        });
+    } else {
+        const uIdx = parseInt(targetVal);
+        if (syllabusUnits[uIdx]) {
+            syllabusUnits[uIdx].topics.push({
+                name: item.name,
+                subtopics: item.subtopics || [],
+                source_pages: item.source_pages || [1]
+            });
+        }
+    }
+
+    unassignedTopics.splice(itemIdx, 1);
+    renderSyllabus();
+}
+
+function discardUnassignedTopic(idx) {
+    unassignedTopics.splice(idx, 1);
+    renderSyllabus();
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function updateUnitTitle(unitIdx, val) {
+    if (syllabusUnits[unitIdx]) syllabusUnits[unitIdx].title = val.trim();
+}
+
+function updateTopicName(unitIdx, topicIdx, val) {
+    if (syllabusUnits[unitIdx] && syllabusUnits[unitIdx].topics[topicIdx]) {
+        syllabusUnits[unitIdx].topics[topicIdx].name = val.trim();
+    }
+}
+
+function addTopicToUnit(unitIdx) {
+    const title = prompt("Enter new topic title:");
+    if (!title || !title.trim()) return;
+    syllabusUnits[unitIdx].topics.push({
+        name: title.trim(),
+        subtopics: [],
+        source_pages: [1]
+    });
+    renderSyllabus();
+}
+
+function deleteTopic(unitIdx, topicIdx) {
+    syllabusUnits[unitIdx].topics.splice(topicIdx, 1);
+    renderSyllabus();
+}
+
+function deleteUnit(unitIdx) {
+    if (confirm("Are you sure you want to remove this unit and all its topics?")) {
+        syllabusUnits.splice(unitIdx, 1);
+        renderSyllabus();
+    }
+}
+
+function addSubtopicPrompt(unitIdx, topicIdx) {
+    const st = prompt("Enter subtopic name:");
+    if (!st || !st.trim()) return;
+    if (!syllabusUnits[unitIdx].topics[topicIdx].subtopics) {
+        syllabusUnits[unitIdx].topics[topicIdx].subtopics = [];
+    }
+    syllabusUnits[unitIdx].topics[topicIdx].subtopics.push(st.trim());
+    renderSyllabus();
+}
+
+function removeSubtopic(unitIdx, topicIdx, stIdx) {
+    syllabusUnits[unitIdx].topics[topicIdx].subtopics.splice(stIdx, 1);
+    renderSyllabus();
+}
+
+function addNewUnitPrompt() {
+    const num = syllabusUnits.length + 1;
+    const title = prompt(`Enter title for Unit ${num}:`, `Unit ${num}: Advanced Concepts`);
+    if (!title || !title.trim()) return;
+    syllabusUnits.push({
+        unit_number: num,
+        title: title.trim(),
+        topics: []
+    });
+    renderSyllabus();
+}
+
+function handleSubjectSelectChange(val) {
+    const group = document.getElementById('newSubjectGroup');
+    if (val === '__NEW__') {
+        group.style.display = 'block';
+    } else {
+        group.style.display = 'block'; // Keep subject name editable for convenience
+    }
+}
+
+async function submitApprovedSyllabus() {
+    const select = document.getElementById('reviewSubjectSelect');
+    let subjectId = select.value;
+    let newSubjectName = document.getElementById('newSubjectName').value.trim();
+    let courseCode = document.getElementById('courseCodeInput').value.trim();
+
+    if (!subjectId) {
+        alert("Please select an existing subject or choose to create a new subject.");
+        select.focus();
+        return;
+    }
+
+    if (subjectId === '__NEW__' && !newSubjectName) {
+        alert("Please enter a name for the subject.");
+        document.getElementById('newSubjectName').focus();
+        return;
+    }
+
+    let flatTopics = [];
+    syllabusUnits.forEach(u => {
+        (u.topics || []).forEach(t => {
+            const name = (t.name || t.title || '').trim();
+            if (name) {
+                flatTopics.push({
+                    unit_name: u.title || `Unit ${u.unit_number}`,
+                    title: name,
+                    subtopics: t.subtopics || [],
+                    source_pages: Array.isArray(t.source_pages) ? t.source_pages.join(', ') : String(t.source_pages || '')
+                });
+            }
+        });
+    });
+
+    if (flatTopics.length === 0) {
+        alert("Cannot approve an empty syllabus. Please ensure at least one topic is present.");
+        return;
+    }
+
+    if (unassignedTopics && unassignedTopics.length > 0) {
+        const proceed = confirm(`You have ${unassignedTopics.length} unassigned topic(s) pending manual review. If you continue, unassigned topics will be discarded. Do you want to proceed?`);
+        if (!proceed) return;
+    }
+
+    try {
+        const res = await fetch("{{ url_for('api_approve_syllabus') }}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                doc_id: docId,
+                subject_id: subjectId,
+                new_subject_name: newSubjectName,
+                course_code: courseCode,
+                units: syllabusUnits,
+                flat_topics: flatTopics
+            })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            alert(data.message || "Syllabus approved and saved successfully!");
+            window.location.href = data.redirect_url || "{{ url_for('roadmap_view') }}";
+        } else {
+            alert("Error: " + (data.error || "Could not approve syllabus."));
+        }
+    } catch (err) {
+        alert("Network error: " + err.message);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    renderSyllabus();
+});
+</script>
+{% endblock %}

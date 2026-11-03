@@ -1,0 +1,346 @@
+{% extends 'base.html' %}
+
+{% block title %}System & Database Operations — EduMate Admin{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+        <div>
+            <h1 class="welcome-title">System Control & Database Backups</h1>
+            <p class="welcome-subtitle">Application configuration, online SQLite backups, and system maintenance toggles</p>
+        </div>
+        <form method="POST" action="{{ url_for('admin.create_database_backup') }}">
+            <button type="submit" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Create Instant Database Backup
+            </button>
+        </form>
+    </div>
+
+    <!-- 2-Column Split: App Configuration & Database Diagnostics -->
+    <div class="two-column-row" style="margin-bottom: 24px;">
+        <!-- Left: System Settings Form -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Application Configuration</h2>
+            </div>
+            <form method="POST" action="{{ url_for('admin.update_system_settings') }}">
+                <div class="form-group" style="padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 14px;">
+                    <label class="remember-label" style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
+                        <input type="checkbox" name="allow_registrations" value="true" {% if settings.allow_registrations %}checked{% endif %}>
+                        <span>Allow Public Student Registrations</span>
+                    </label>
+                    <span class="text-muted-sm" style="display: block; margin-left: 24px;">
+                        When unchecked, the public /register page rejects new submissions. Administrators can still create users manually.
+                    </span>
+                </div>
+
+                <div class="form-group" style="padding: 12px 14px; border: 1px solid #fed7aa; background-color: #fff7ed; border-radius: var(--radius-md); margin-bottom: 18px;">
+                    <label class="remember-label" style="font-weight: 600; color: #9a3412; margin-bottom: 4px;">
+                        <input type="checkbox" name="maintenance_mode" value="true" {% if settings.maintenance_mode %}checked{% endif %}>
+                        <span>Platform Maintenance Mode</span>
+                    </label>
+                    <span class="text-muted-sm" style="display: block; margin-left: 24px; color: #c2410c;">
+                        Displays a maintenance warning on non-administrative endpoints while allowing admins full continuous oversight.
+                    </span>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save System Settings</button>
+            </form>
+        </div>
+
+        <!-- Right: SQLite Database Diagnostics -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Database Storage & Engine</h2>
+            </div>
+            <div class="system-health-grid" style="grid-template-columns: 1fr 1fr; gap: 14px;">
+                <div class="health-item">
+                    <span class="health-label">Storage Engine</span>
+                    <span class="health-val">SQLite 3 (v{{ sqlite_version }})</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">Active DB File Size</span>
+                    <span class="health-val">{{ db_size_kb }} KB</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">Database File</span>
+                    <span class="health-val">edumate.db</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">Backup Architecture</span>
+                    <span class="health-val text-success">Online SQLite Backup API</span>
+                </div>
+                <div class="health-item" style="grid-column: 1 / -1;">
+                    <span class="health-label">Integrity Status</span>
+                    <span class="health-val text-success">✓ Foreign Keys Enforced &bull; WAL/Zero Loss Safe</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hybrid AI Architecture & Live Diagnostic Control -->
+    <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
+            <div>
+                <h2 class="card-title" style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                    </svg>
+                    Hybrid AI Provider Architecture & Diagnostics
+                </h2>
+                <p class="text-muted-sm" style="margin-top: 4px;">
+                    Dual-provider resilience: Google Gemini free tier (Primary) with automatic graceful fallback to local Ollama ({{ ai_status.fallback.model }}).
+                </p>
+            </div>
+            <div>
+                {% if ai_status.overall_available %}
+                <span class="status-badge status-completed" style="font-size: 13px; padding: 6px 12px;">✓ AI Engine Online</span>
+                {% else %}
+                <span class="status-badge status-pending" style="font-size: 13px; padding: 6px 12px; background: #fee2e2; color: #dc2626;">⚠ Providers Inactive</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 2-Column Provider Comparison Grid -->
+        <div class="two-column-row" style="margin-bottom: 20px;">
+            <!-- Primary: Gemini -->
+            <div style="background-color: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 18px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span style="font-weight: 700; font-size: 14px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: {% if ai_status.primary.configured %}#10b981{% else %}#ef4444{% endif %};"></span>
+                        Primary: Google Gemini
+                    </span>
+                    <span class="pill-badge {% if ai_status.primary.configured %}pill-info{% else %}pill-important{% endif %}">
+                        {{ ai_status.primary.status }}
+                    </span>
+                </div>
+                <div class="system-health-grid" style="grid-template-columns: 1fr; gap: 8px;">
+                    <div class="health-item" style="padding: 8px 10px; background: #ffffff;">
+                        <span class="health-label">Target Model</span>
+                        <span class="health-val" style="font-family: monospace; font-size: 12px;">{{ ai_status.primary.model }}</span>
+                    </div>
+                    <div class="health-item" style="padding: 8px 10px; background: #ffffff;">
+                        <span class="health-label">API Key Status</span>
+                        <span class="health-val" style="font-family: monospace; font-size: 12px;">{{ ai_status.primary.key_masked }}</span>
+                    </div>
+                    <div class="health-item" style="padding: 8px 10px; background: #ffffff;">
+                        <span class="health-label">SDK & Protocol</span>
+                        <span class="health-val">Official google-genai SDK</span>
+                    </div>
+                    <div class="health-item" style="padding: 8px 10px; background: #ffffff;">
+                        <span class="health-label">Cost Tier</span>
+                        <span class="health-val text-success">Free Tier (Zero Budget)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fallback: Ollama -->
+            <div style="background-color: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 18px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span style="font-weight: 700; font-size: 14px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: {% if ai_status.fallback.reachable and ai_status.fallback.model_ready %}#10b981{% else %}#f59e0b{% endif %};"></span>
+                        Fallback: Local Ollama
+                    </span>
+                    <span class="pill-badge {% if ai_status.fallback.reachable and ai_status.fallback.model_ready %}pill-neutral{% else %}pill-important{% endif %}">
+                        {{ ai_status.fallback.status }}
+                    </span>
+                </div>
+                <div class="system-health-grid" style="grid-template-columns: 1fr; gap: 8px;">
+                    <div class="health-item" style="padding: 8px 10px; background: #ffffff;">
+                        <span class="health-label">Local Model</span>
+                        <span class="health-val" style="font-family: monospace; font-size: 12px;">{{ ai_status.fallback.model }}</span>
+                    </div>
+                    <div class="health-item" style="padding: 8px 10px; background: #ffffff;">
+                        <span class="health-label">Daemon Endpoint</span>
+                        <span class="health-val" style="font-family: monospace; font-size: 12px;">{{ ai_status.fallback.base_url }}</span>
+                    </div>
+                    <div class="health-item" style="padding: 8px 10px; background: #ffffff;">
+                        <span class="health-label">Daemon Status</span>
+                        <span class="health-val {% if ai_status.fallback.reachable %}text-success{% else %}text-muted{% endif %}">
+                            {% if ai_status.fallback.reachable %}Connected (REST API){% else %}Daemon Stopped / Standby{% endif %}
+                        </span>
+                    </div>
+                    <div class="health-item" style="padding: 8px 10px; background: #ffffff;">
+                        <span class="health-label">Fallback Trigger</span>
+                        <span class="health-val text-muted-sm">HTTP 429 Quota or 5xx Outage</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fallback Policy & Safety Disclosure Banner -->
+        <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 20px;">
+            <div style="font-size: 12.5px; color: #166534; line-height: 1.5;">
+                <strong>Disciplined Fallback Policy:</strong>
+                All student/admin queries attempt Google Gemini first. If Gemini returns HTTP 429 quota exhaustion or transient 5xx server downtime, the service seamlessly routes to local Ollama (<code>{{ ai_status.fallback.model }}</code>). Client-side validation errors never trigger fallback. Every AI response carries provenance metadata identifying the generating provider.
+            </div>
+        </div>
+
+        <!-- Live Diagnostic Sandbox Form -->
+        <div style="background-color: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 18px;">
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">
+                Admin Diagnostic Test Sandbox
+            </h3>
+            <p class="text-muted-sm" style="margin-bottom: 14px;">
+                Dispatch an end-to-end test query to inspect provider routing, latency, and model responses. All tests are recorded in the Admin Audit Trail.
+            </p>
+            <form id="aiTestForm" onsubmit="handleAiTest(event)">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="aiPromptInput" class="form-label" style="font-size: 12.5px; font-weight: 600;">Test Prompt</label>
+                    <input type="text" id="aiPromptInput" class="form-control" value="Explain Time Complexity of Merge Sort in 2 sentences." required style="font-size: 13.5px;">
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <button type="submit" id="aiTestBtn" class="btn btn-primary" style="padding: 8px 18px;">
+                        <span id="aiBtnText">Run Diagnostic Test</span>
+                        <span id="aiSpinner" style="display: none; margin-left: 6px;">⏳ Testing...</span>
+                    </button>
+                    <button type="button" class="btn btn-outline" onclick="checkAiStatus()" style="padding: 8px 14px;">
+                        Refresh Provider Status
+                    </button>
+                </div>
+            </form>
+
+            <!-- Test Results Box -->
+            <div id="aiTestResultBox" style="display: none; margin-top: 18px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px;">
+                    <span id="aiResultBadge" class="pill-badge pill-info" style="font-size: 12px; font-weight: 600;">Provider</span>
+                    <span id="aiFallbackBadge" class="pill-badge pill-neutral" style="font-size: 12px;">Fallback: No</span>
+                    <span id="aiLatencyBadge" class="text-muted-sm" style="font-size: 12px;">Latency: 0.0s</span>
+                    <span id="aiModelBadge" class="text-muted-sm" style="font-family: monospace; font-size: 12px;">Model</span>
+                </div>
+                <div id="aiResponseText" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: var(--radius-sm); padding: 14px; font-size: 13.5px; line-height: 1.6; color: #1e293b; white-space: pre-wrap;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Backups Directory Table -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Available Database Backups ({{ backup_files|length }})</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Backup Filename</th>
+                        <th>File Size</th>
+                        <th>Created Timestamp</th>
+                        <th style="text-align: right;">Download Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if backup_files %}
+                        {% for b in backup_files %}
+                        <tr>
+                            <td>
+                                <strong>{{ b.name }}</strong>
+                            </td>
+                            <td>{{ b.size_kb }} KB</td>
+                            <td class="text-muted-sm">{{ b.created_at }}</td>
+                            <td style="text-align: right;">
+                                <a href="{{ url_for('admin.download_backup_file', filename=b.name) }}" class="btn btn-outline btn-sm">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    Download .sqlite
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="text-muted" style="text-align: center; padding: 32px;">
+                                No backup snapshots created yet. Click "Create Instant Database Backup" above to generate a safe snapshot.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function handleAiTest(event) {
+    event.preventDefault();
+    const promptInput = document.getElementById('aiPromptInput');
+    const prompt = promptInput.value.trim();
+    if (!prompt) return;
+
+    const btn = document.getElementById('aiTestBtn');
+    const btnText = document.getElementById('aiBtnText');
+    const spinner = document.getElementById('aiSpinner');
+    const resultBox = document.getElementById('aiTestResultBox');
+    const badge = document.getElementById('aiResultBadge');
+    const fallbackBadge = document.getElementById('aiFallbackBadge');
+    const latencyBadge = document.getElementById('aiLatencyBadge');
+    const modelBadge = document.getElementById('aiModelBadge');
+    const responseText = document.getElementById('aiResponseText');
+
+    btn.disabled = true;
+    btnText.style.display = 'none';
+    spinner.style.display = 'inline';
+    resultBox.style.display = 'none';
+
+    try {
+        const res = await fetch("{{ url_for('admin.admin_ai_test') }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ prompt: prompt })
+        });
+        const data = await res.json();
+
+        resultBox.style.display = 'block';
+        if (data.success) {
+            badge.className = data.provider === 'gemini' ? 'pill-badge pill-info' : 'pill-badge pill-important';
+            badge.textContent = data.provider === 'gemini' ? '⚡ Gemini (Primary)' : '🦙 Ollama (Fallback)';
+
+            fallbackBadge.textContent = data.fallback_used ? 'Fallback: Yes (Quota/Outage)' : 'Fallback: No (Direct)';
+            fallbackBadge.className = data.fallback_used ? 'pill-badge pill-important' : 'pill-badge pill-neutral';
+
+            latencyBadge.textContent = `Latency: ${data.elapsed_sec}s`;
+            modelBadge.textContent = `Model: ${data.model}`;
+            responseText.textContent = data.response;
+            responseText.style.color = '#1e293b';
+        } else {
+            badge.className = 'pill-badge pill-important';
+            badge.textContent = 'Execution Failed';
+            fallbackBadge.textContent = 'Both Providers Failed';
+            fallbackBadge.className = 'pill-badge pill-important';
+            latencyBadge.textContent = '';
+            modelBadge.textContent = '';
+            responseText.textContent = 'Error: ' + (data.error || 'Diagnostic test could not be completed.');
+            responseText.style.color = '#b91c1c';
+        }
+    } catch (err) {
+        resultBox.style.display = 'block';
+        badge.className = 'pill-badge pill-important';
+        badge.textContent = 'Network Error';
+        fallbackBadge.textContent = '';
+        latencyBadge.textContent = '';
+        modelBadge.textContent = '';
+        responseText.textContent = 'Client network error: ' + err.message;
+        responseText.style.color = '#b91c1c';
+    } finally {
+        btn.disabled = false;
+        btnText.style.display = 'inline';
+        spinner.style.display = 'none';
+    }
+}
+
+async function checkAiStatus() {
+    try {
+        const res = await fetch("{{ url_for('admin.admin_ai_status') }}");
+        const data = await res.json();
+        if (data.success) {
+            window.location.reload();
+        }
+    } catch (e) {
+        alert('Could not refresh status: ' + e.message);
+    }
+}
+</script>
+{% endblock %}

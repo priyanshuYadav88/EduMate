@@ -1204,6 +1204,18 @@ button, input, select, textarea {
     transition: border-color 0.15s ease;
 }
 
+select.form-control {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 16px;
+    padding-right: 38px;
+    cursor: pointer;
+}
+
 .form-control:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
@@ -1484,6 +1496,111 @@ button, input, select, textarea {
 
 .empty-state p {
     margin-bottom: 10px;
+}
+
+/* ==========================================================================
+   Subjects & Syllabus Management Styles
+   ========================================================================== */
+
+.subjects-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+.subject-detail-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.subject-detail-card:hover {
+    box-shadow: var(--shadow-dropdown);
+}
+
+.subject-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.topics-compact-list {
+    max-height: 190px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-right: 4px;
+}
+
+.topic-compact-item {
+    font-size: 13px;
+    color: var(--text-primary);
+    padding: 4px 0;
+}
+
+.empty-topics-notice {
+    padding: 12px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.btn-text-link {
+    background: transparent;
+    border: none;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    transition: color 0.15s ease;
+}
+
+.btn-text-link:hover {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+/* PDF Upload Dropzone */
+.pdf-dropzone {
+    border: 2px dashed #bfdbfe;
+    background-color: #f8fafc;
+    border-radius: var(--radius-md);
+    padding: 24px 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.pdf-dropzone:hover {
+    background-color: #eff6ff;
+    border-color: var(--primary);
+}
+
+.dropzone-text {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.dropzone-hint {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    max-width: 380px;
+}
+
+.topic-edit-row {
+    transition: background-color 0.15s ease;
 }
 
 /* ==========================================================================
