@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+
+{% block title %}User Management — EduMate Admin{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+        <div>
+            <h1 class="welcome-title">User Accounts Directory</h1>
+            <p class="welcome-subtitle">Search, filter, edit, activate/deactivate, and manage student and administrator accounts</p>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('createUserModal').style.display='flex'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+            Create New User
+        </button>
+    </div>
+
+    <!-- Filter & Search Bar -->
+    <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
+        <form method="GET" action="{{ url_for('admin.users_list') }}" style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;">
+            <div style="flex: 2; min-width: 220px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Search Users</label>
+                <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Search by username or email...">
+            </div>
+
+            <div style="flex: 1; min-width: 140px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Role</label>
+                <select name="role" class="form-control">
+                    <option value="">All Roles</option>
+                    <option value="student" {% if role_filter == 'student' %}selected{% endif %}>Student</option>
+                    <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Administrator</option>
+                </select>
+            </div>
+
+            <div style="flex: 1; min-width: 140px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Status</label>
+                <select name="status" class="form-control">
+                    <option value="">All Statuses</option>
+                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive / Deactivated</option>
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button type="submit" class="btn btn-primary" style="padding: 10px 18px;">Filter</button>
+                {% if search or role_filter or status_filter %}
+                <a href="{{ url_for('admin.users_list') }}" class="btn btn-outline" style="padding: 10px 14px;">Clear</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- Users Table Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">User Accounts ({{ pagination.total }} Total Found)</h2>
+            <span class="text-muted-sm">Page {{ pagination.page }} of {{ pagination.pages or 1 }}</span>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email Address</th>
+                        <th>Role</th>
+                        <th>Account Status</th>
+                        <th>Registration Date</th>
+                        <th style="text-align: right;">Operations</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if pagination.items %}
+                        {% for u in pagination.items %}
+                        <tr>
+                            <td>#{{ u.id }}</td>
+                            <td>
+                                <a href="{{ url_for('admin.user_detail', user_id=u.id) }}" style="font-weight: 600; color: var(--primary);">
+                                    {{ u.username }}
+                                </a>
+                                {% if u.id == current_user.id %}
+                                <span class="pill-badge pill-info" style="margin-left: 6px;">You</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ u.email }}</td>
+                            <td>
+                                <span class="pill-badge {% if u.role == 'admin' %}pill-important{% else %}pill-neutral{% endif %}">
+                                    {{ u.role|capitalize }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if u.is_active %}
+                                <span class="status-badge status-completed">Active</span>
+                                {% else %}
+                                <span class="status-badge status-pending">Deactivated</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted-sm">{{ u.created_at.strftime('%d %b %Y') }}</td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <a href="{{ url_for('admin.user_detail', user_id=u.id) }}" class="btn btn-outline btn-sm">
+                                    Manage &rarr;
+                                </a>
+
+                                {% if u.id != current_user.id %}
+                                <form method="POST" action="{{ url_for('admin.toggle_user', user_id=u.id) }}" style="display: inline-block; margin-left: 4px;">
+                                    <button type="submit" class="btn btn-outline btn-sm" title="Toggle active status">
+                                        {% if u.is_active %}Deactivate{% else %}Activate{% endif %}
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ url_for('admin.delete_user', user_id=u.id) }}" style="display: inline-block; margin-left: 4px;" onsubmit="return confirm('Are you sure you want to permanently delete user {{ u.username }} and all associated data?');">
+                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-muted" style="text-align: center; padding: 36px;">
+                                No users matched your search criteria.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        {% if pagination.pages > 1 %}
+        <div style="display: flex; justify-content: center; gap: 8px; margin-top: 20px; align-items: center;">
+            {% if pagination.has_prev %}
+            <a href="{{ url_for('admin.users_list', page=pagination.prev_num, q=search, role=role_filter, status=status_filter) }}" class="btn btn-outline btn-sm">&larr; Previous</a>
+            {% endif %}
+
+            <span class="text-muted-sm" style="padding: 0 10px;">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+
+            {% if pagination.has_next %}
+            <a href="{{ url_for('admin.users_list', page=pagination.next_num, q=search, role=role_filter, status=status_filter) }}" class="btn btn-outline btn-sm">Next &rarr;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal-backdrop" id="createUserModal" style="display: none;">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Create New User Account</h3>
+            <button type="button" class="modal-close-btn" onclick="document.getElementById('createUserModal').style.display='none'">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin.create_user') }}">
+            <div class="form-group">
+                <label for="newUsername">Username <span class="text-danger">*</span></label>
+                <input type="text" id="newUsername" name="username" class="form-control" placeholder="e.g. rohit_kumar" required>
+            </div>
+            <div class="form-group">
+                <label for="newEmail">Email Address <span class="text-danger">*</span></label>
+                <input type="email" id="newEmail" name="email" class="form-control" placeholder="e.g. rohit@college.edu" required>
+            </div>
+            <div class="form-group">
+                <label for="newPassword">Initial Password <span class="text-danger">*</span></label>
+                <input type="password" id="newPassword" name="password" class="form-control" placeholder="Minimum 6 characters" minlength="6" required>
+            </div>
+            <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label for="newRole">System Role</label>
+                    <select id="newRole" name="role" class="form-control">
+                        <option value="student" selected>Student</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="newStatus">Initial Status</label>
+                    <select id="newStatus" name="is_active" class="form-control">
+                        <option value="true" selected>Active</option>
+                        <option value="false">Deactivated</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('createUserModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create User</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

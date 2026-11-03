@@ -1,19 +1,20 @@
 {% extends 'base.html' %}
 
-{% block title %}Revision Planner — EduMate{% endblock %}
+{% block title %}Active Revision & Viva Prep — EduMate{% endblock %}
 
 {% block content %}
 <div class="content-container">
-    <div class="admin-header-row">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px;">
         <div>
-            <h1 class="welcome-title">Active Revision Tracker</h1>
-            <p class="welcome-subtitle">Prioritize difficult topics and spaced repetition schedules</p>
+            <h1 class="welcome-title">Active Revision & Viva Preparation</h1>
+            <p class="welcome-subtitle">Generate instant conceptual summaries, viva questions, and high-yield study notes with EduMate AI</p>
         </div>
     </div>
 
-    <div class="card" style="margin-top: 16px;">
+    <div class="card" style="margin-top: 18px;">
         <div class="card-header">
-            <h2 class="card-title">Pending Topics Requiring Revision</h2>
+            <h2 class="card-title">Pending Topics Requiring Revision & Practice</h2>
+            <span class="text-muted-sm">Select any topic to generate targeted revision material</span>
         </div>
         <div class="table-responsive">
             <table class="data-table">
@@ -21,30 +22,175 @@
                     <tr>
                         <th>Subject</th>
                         <th>Topic Name</th>
-                        <th>Status</th>
+                        <th>Unit</th>
                         <th>Priority</th>
+                        <th style="text-align: right;">AI Revision Actions</th>
                     </tr>
                 </thead>
                 <tbody>
+                    {% set pending_count = namespace(value=0) %}
                     {% for subj in subjects %}
                         {% for topic in subj.topics %}
                             {% if not topic.is_completed %}
+                            {% set pending_count.value = pending_count.value + 1 %}
                             <tr>
                                 <td>
                                     <span class="pill-badge" style="background-color: {{ subj.color }}15; color: {{ subj.color }};">
-                                        {{ subj.name }}
+                                        {{ subj.code }} ({{ subj.name }})
                                     </span>
                                 </td>
-                                <td>{{ topic.title }}</td>
-                                <td><span class="status-badge status-pending">Unfinished</span></td>
+                                <td><strong>{{ topic.title }}</strong></td>
+                                <td class="text-muted-sm">{{ topic.unit_name or 'General' }}</td>
                                 <td><span class="pill-badge pill-important">High Priority</span></td>
+                                <td style="text-align: right; white-space: nowrap;">
+                                    <div style="display: inline-flex; gap: 6px;">
+                                        <button type="button" class="btn btn-outline btn-sm" style="padding: 4px 8px; font-size: 11.5px;"
+                                            onclick="openAcademicTool({{ topic.id }}, 'summary', '{{ topic.title|escape }}', '{{ subj.name|escape }}')">
+                                            Summary
+                                        </button>
+                                        <button type="button" class="btn btn-outline btn-sm" style="padding: 4px 8px; font-size: 11.5px;"
+                                            onclick="openAcademicTool({{ topic.id }}, 'short_questions', '{{ topic.title|escape }}', '{{ subj.name|escape }}')">
+                                            Viva Q&A
+                                        </button>
+                                        <button type="button" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px;"
+                                            onclick="openAcademicTool({{ topic.id }}, 'notes', '{{ topic.title|escape }}', '{{ subj.name|escape }}')">
+                                            Study Notes
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                             {% endif %}
                         {% endfor %}
                     {% endfor %}
+
+                    {% if pending_count.value == 0 %}
+                    <tr>
+                        <td colspan="5" class="text-muted" style="text-align: center; padding: 36px;">
+                            No pending revision topics found! All topics completed or no coursework enrolled.
+                        </td>
+                    </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>
     </div>
 </div>
+
+<!-- Academic Tool Modal -->
+<div class="modal-overlay" id="academicModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 1050; align-items: center; justify-content: center; padding: 16px;">
+    <div class="modal-card card" style="max-width: 720px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+        <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h3 id="academicModalTitle" class="card-title" style="margin: 0; font-size: 16px;">Topic Revision Tool</h3>
+                <span id="academicModalSubtitle" class="text-muted-sm" style="display: block; margin-top: 2px;">Subject & Type</span>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="closeAcademicModal()" style="border: none; font-size: 18px; line-height: 1; padding: 4px 8px;">&times;</button>
+        </div>
+
+        <div id="academicModalBody" style="padding: 20px; overflow-y: auto; flex: 1;">
+            <!-- Loading Spinner -->
+            <div id="academicLoading" style="text-align: center; padding: 40px 20px;">
+                <div style="display: inline-block; width: 36px; height: 36px; border: 3px solid #e2e8f0; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                <p style="margin-top: 14px; font-weight: 500; color: var(--text-primary);">Generating academic revision material with EduMate AI...</p>
+                <span class="text-muted-sm">Structuring key definitions, concepts, and high-yield questions</span>
+            </div>
+
+            <!-- Error State -->
+            <div id="academicError" style="display: none; text-align: center; padding: 30px 20px;">
+                <div class="alert alert-danger" id="academicErrorMessage">Failed to generate content.</div>
+                <button type="button" class="btn btn-outline" onclick="closeAcademicModal()">Close</button>
+            </div>
+
+            <!-- Content Display -->
+            <div id="academicContentWrapper" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div id="provenanceBadge"></div>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="copyModalContent()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Copy Text
+                    </button>
+                </div>
+                <div id="academicContentText" style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 18px; line-height: 1.6; font-size: 13.5px; white-space: pre-wrap; color: #1e293b; max-height: 480px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <div style="padding: 14px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; background-color: #ffffff;">
+            <button type="button" class="btn btn-outline" onclick="closeAcademicModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function openAcademicTool(topicId, contentType, topicTitle, subjectName) {
+    const titles = {
+        'summary': 'Quick Revision Summary',
+        'short_questions': 'Viva Questions & Answers',
+        'notes': 'Comprehensive Study Notes'
+    };
+
+    document.getElementById('academicModalTitle').textContent = `${titles[contentType] || 'Revision'}: ${topicTitle}`;
+    document.getElementById('academicModalSubtitle').textContent = `${subjectName} • Powered by EduMate AI`;
+
+    document.getElementById('academicModal').style.display = 'flex';
+    document.getElementById('academicLoading').style.display = 'block';
+    document.getElementById('academicError').style.display = 'none';
+    document.getElementById('academicContentWrapper').style.display = 'none';
+
+    try {
+        const res = await fetch('/api/ai/academic-content', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                topic_id: topicId,
+                content_type: contentType
+            })
+        });
+
+        const data = await res.json();
+        if (data.success && data.content) {
+            document.getElementById('academicContentText').textContent = data.content;
+
+            const provBadge = document.getElementById('provenanceBadge');
+            if (data.provider === 'gemini') {
+                provBadge.innerHTML = '<span class="pill-badge pill-info" style="font-size:11px;">⚡ Gemini Primary</span>';
+            } else if (data.provider === 'ollama') {
+                provBadge.innerHTML = '<span class="pill-badge pill-warning" style="font-size:11px;">🦙 Ollama Fallback (gemma3:1b)</span>';
+            } else {
+                provBadge.innerHTML = '<span class="pill-badge pill-neutral" style="font-size:11px;">EduMate AI Engine</span>';
+            }
+
+            document.getElementById('academicLoading').style.display = 'none';
+            document.getElementById('academicContentWrapper').style.display = 'block';
+        } else {
+            throw new Error(data.error || "Unable to generate revision content.");
+        }
+    } catch (err) {
+        document.getElementById('academicLoading').style.display = 'none';
+        document.getElementById('academicErrorMessage').textContent = err.message || "Failed to load content.";
+        document.getElementById('academicError').style.display = 'block';
+    }
+}
+
+function closeAcademicModal() {
+    document.getElementById('academicModal').style.display = 'none';
+}
+
+function copyModalContent() {
+    const text = document.getElementById('academicContentText').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        alert("Revision content copied to clipboard!");
+    }).catch(() => {
+        alert("Copy failed. Please manually select and copy text.");
+    });
+}
+</script>
 {% endblock %}

@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduMate — Plan Smarter. Study Better. Achieve More.</title>
+    <!-- Google Fonts: Inter for clean typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Landing Page Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">
+</head>
+<body class="landing-body">
+
+    <!-- Header Navigation -->
+    <header class="landing-header">
+        <div class="landing-container landing-nav-container">
+            <!-- Brand Logo -->
+            <a href="#hero" class="landing-brand">
+                <div class="brand-icon-box">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                        <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                    </svg>
+                </div>
+                <div class="brand-name-group">
+                    <span class="brand-title">EduMate</span>
+                    <span class="brand-tag">Smart Study Planner</span>
+                </div>
+            </a>
+
+            <!-- Nav Links -->
+            <nav>
+                <ul class="landing-nav-menu" id="landingNavMenu">
+                    <li><a href="#hero" class="landing-nav-link">Home</a></li>
+                    <li><a href="#features" class="landing-nav-link">Features</a></li>
+                    <li><a href="#how-it-works" class="landing-nav-link">How It Works</a></li>
+                    <li><a href="#about" class="landing-nav-link">About</a></li>
+                </ul>
+            </nav>
+
+            <!-- Actions / Auth Buttons -->
+            <div class="landing-nav-actions">
+                {% if current_user.is_authenticated %}
+                    {% if current_user.is_admin %}
+                        <a href="{{ url_for('admin.dashboard') }}" class="btn-landing btn-landing-primary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                            <span>Admin Dashboard</span>
+                        </a>
+                    {% else %}
+                        <a href="{{ url_for('dashboard') }}" class="btn-landing btn-landing-primary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                            <span>My Dashboard</span>
+                        </a>
+                    {% endif %}
+                    <a href="{{ url_for('auth.logout') }}" class="btn-landing btn-landing-secondary">Log Out</a>
+                {% else %}
+                    <a href="{{ url_for('auth.login') }}" class="btn-landing btn-landing-text">Login</a>
+                    <a href="{{ url_for('auth.register') }}" class="btn-landing btn-landing-primary">Get Started</a>
+                {% endif %}
+
+                <!-- Mobile Menu Button -->
+                <button type="button" class="mobile-nav-toggle" id="mobileNavToggle" aria-label="Toggle navigation">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Hero Section -->
+        <section class="hero-section" id="hero">
+            <div class="landing-container">
+                <div class="hero-content">
+                    <div class="hero-pill">
+                        <span class="hero-pill-icon">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        </span>
+                        <span>Designed for University &amp; College Students</span>
+                    </div>
+
+                    <h1 class="hero-title">
+                        Plan Smarter. Study Better. <br><span class="text-accent">Achieve More.</span>
+                    </h1>
+
+                    <p class="hero-subtitle">
+                        EduMate helps students organize their syllabus, create personalized study roadmaps, understand difficult topics and track their learning progress — all in one place.
+                    </p>
+
+                    <div class="hero-actions">
+                        {% if current_user.is_authenticated %}
+                            {% if current_user.is_admin %}
+                                <a href="{{ url_for('admin.dashboard') }}" class="btn-landing btn-landing-primary">Go to Admin Dashboard</a>
+                            {% else %}
+                                <a href="{{ url_for('dashboard') }}" class="btn-landing btn-landing-primary">Go to Study Dashboard</a>
+                            {% endif %}
+                        {% else %}
+                            <a href="{{ url_for('auth.register') }}" class="btn-landing btn-landing-primary">Get Started Free</a>
+                        {% endif %}
+                        <a href="#features" class="btn-landing btn-landing-secondary">Explore Features &darr;</a>
+                    </div>
+
+                    <div class="hero-trust-badges">
+                        <div class="trust-badge-item">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>University Syllabus PDF Parser</span>
+                        </div>
+                        <div class="trust-badge-item">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Dynamic Daily Roadmap</span>
+                        </div>
+                        <div class="trust-badge-item">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Curriculum-Grounded AI Help</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Preview Window (Genuine EduMate UI) -->
+                <div class="hero-preview-wrapper">
+                    <div class="browser-mockup">
+                        <!-- Browser Window Chrome -->
+                        <div class="browser-header">
+                            <div class="browser-controls">
+                                <span class="browser-dot red"></span>
+                                <span class="browser-dot yellow"></span>
+                                <span class="browser-dot green"></span>
+                            </div>
+                            <div class="browser-address-bar">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                <span>edumate.study/roadmap</span>
+                            </div>
+                            <div class="browser-status-badge">
+                                <span class="browser-status-dot"></span>
+                                <span>Roadmap Active</span>
+                            </div>
+                        </div>
+
+                        <!-- Real Interface Representation -->
+                        <div class="preview-interior">
+                            <!-- Left Sidebar: Syllabus Overview -->
+                            <div class="preview-sidebar">
+                                <div class="preview-subject-card">
+                                    <div class="preview-subject-header">
+                                        <span class="preview-code-tag">CS201</span>
+                                        <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">14 Days to Exam</span>
+                                    </div>
+                                    <h4 class="preview-subject-name">Data Structures &amp; Algorithms</h4>
+                                    <div class="preview-progress-label">
+                                        <span>Syllabus Coverage</span>
+                                        <span style="font-weight: 700; color: #2563eb;">58%</span>
+                                    </div>
+                                    <div class="preview-progress-bar">
+                                        <div class="preview-progress-fill"></div>
+                                    </div>
+                                </div>
+
+                                <div class="preview-unit-list">
+                                    <div class="preview-unit-item">
+                                        <span>Unit 1: Linear Lists &amp; Stacks</span>
+                                        <span style="color: #059669; font-weight: 600;">&#10003; Done</span>
+                                    </div>
+                                    <div class="preview-unit-item active">
+                                        <span>Unit 2: Trees &amp; Binary Search Trees</span>
+                                        <span style="color: #2563eb; font-weight: 600;">Today</span>
+                                    </div>
+                                    <div class="preview-unit-item">
+                                        <span>Unit 3: Graphs &amp; Shortest Paths</span>
+                                        <span style="color: #64748b;">Pending</span>
+                                    </div>
+                                    <div class="preview-unit-item">
+                                        <span>Unit 4: Sorting &amp; Searching</span>
+                                        <span style="color: #64748b;">Pending</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Main: Today's Active Topic & AI Guidance -->
+                            <div class="preview-main-content">
+                                <div class="preview-today-banner">
+                                    <div class="preview-banner-top">
+                                        <span class="preview-banner-pill">Today's Focus Topic</span>
+                                        <span class="preview-date-text">Scheduled for Today</span>
+                                    </div>
+                                    <h3 class="preview-topic-title">Binary Search Trees: Insertion &amp; In-Order Traversal</h3>
+                                    <p class="preview-unit-subtext">Subject: Data Structures (CS201) &bull; Unit 2: Non-Linear Data Structures</p>
+
+                                    <div class="preview-subtopics">
+                                        <span class="subtopic-chip">BST Node Structure</span>
+                                        <span class="subtopic-chip">Recursive Insertion</span>
+                                        <span class="subtopic-chip">Left-Root-Right Traversal</span>
+                                        <span class="subtopic-chip">Time Complexity O(h)</span>
+                                    </div>
+
+                                    <div class="preview-actions-row">
+                                        <button type="button" class="btn-preview-done">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                            <span>Mark as Completed</span>
+                                        </button>
+                                        <button type="button" class="btn-preview-ai">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/></svg>
+                                            <span>Explain with AI</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- AI Assistant Context-Grounded Preview -->
+                                <div class="preview-ai-callout">
+                                    <div class="preview-ai-header">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                        <span>AI Study Assistant &mdash; Core Concept</span>
+                                    </div>
+                                    <p class="preview-ai-text">
+                                        In a Binary Search Tree (BST), every node follows the ordering rule: all keys in the left subtree are strictly smaller than the node, and all keys in the right subtree are strictly greater. Performing an <strong>in-order traversal</strong> (Left &rarr; Root &rarr; Right) visits elements in strictly ascending sorted order.
+                                    </p>
+                                    <span class="preview-citation-badge">[Syllabus Reference: Unit 2 &mdash; BST Traversal]</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section (Actual Implemented Features) -->
+        <section class="landing-section" id="features">
+            <div class="landing-container">
+                <div class="section-header">
+                    <span class="section-label">Core Capabilities</span>
+                    <h2 class="section-title">Built Around Real Academic Needs</h2>
+                    <p class="section-description">
+                        EduMate does not rely on generic study templates. Every feature is engineered specifically to help students manage university syllabi, structured deadlines, and daily exam preparation.
+                    </p>
+                </div>
+
+                <div class="features-grid">
+                    <!-- Feature 1: Intelligent Syllabus Extractor -->
+                    <div class="feature-card">
+                        <div class="feature-icon-box">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature-title">Intelligent Syllabus Extractor</h3>
+                        <p class="feature-description">
+                            Upload official university syllabus PDFs (including AKTU-style formats). EduMate identifies subjects, course codes, unit headings, and nested topics while discarding irrelevant administrative pages.
+                        </p>
+                    </div>
+
+                    <!-- Feature 2: Smart Study Roadmap -->
+                    <div class="feature-card">
+                        <div class="feature-icon-box">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature-title">Smart Study Roadmap</h3>
+                        <p class="feature-description">
+                            Transform an entire semester's syllabus into a realistic day-by-day study calendar based on your exam date and daily topic pace, avoiding last-minute panic.
+                        </p>
+                    </div>
+
+                    <!-- Feature 3: AI Study Assistant -->
+                    <div class="feature-card">
+                        <div class="feature-icon-box">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature-title">AI Study Assistant</h3>
+                        <p class="feature-description">
+                            Receive concise, verified explanations for challenging topics directly grounded in your syllabus units, complete with citations, key formulas, and self-test questions.
+                        </p>
+                    </div>
+
+                    <!-- Feature 4: Topic Completion Tracking -->
+                    <div class="feature-card">
+                        <div class="feature-icon-box">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature-title">Topic Completion Tracking</h3>
+                        <p class="feature-description">
+                            Mark topics as Completed or In Progress with a single click. Statuses persist safely in your database, updating your overall progress without page reloads.
+                        </p>
+                    </div>
+
+                    <!-- Feature 5: Study Progress Monitoring -->
+                    <div class="feature-card">
+                        <div class="feature-icon-box">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature-title">Study Progress Monitoring</h3>
+                        <p class="feature-description">
+                            Get real-time visibility into overall syllabus completion percentage, unit-level mastery bars, and daily scheduled goals to keep your revision disciplined.
+                        </p>
+                    </div>
+
+                    <!-- Feature 6: Academic Organization -->
+                    <div class="feature-card">
+                        <div class="feature-icon-box">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature-title">Academic Organization</h3>
+                        <p class="feature-description">
+                            Keep all course subjects, extracted units, subtopics, notes, and timetable slots neatly organized under one student profile with zero clutter.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section (4 Clear Steps) -->
+        <section class="landing-section bg-subtle" id="how-it-works">
+            <div class="landing-container">
+                <div class="section-header">
+                    <span class="section-label">Workflow</span>
+                    <h2 class="section-title">How EduMate Works</h2>
+                    <p class="section-description">
+                        Go from an unstructured syllabus document to an actionable study routine in four simple, student-guided steps.
+                    </p>
+                </div>
+
+                <div class="steps-grid">
+                    <!-- Step 1 -->
+                    <div class="step-card">
+                        <div class="step-number">1</div>
+                        <h3 class="step-title">Upload Syllabus PDF</h3>
+                        <p class="step-description">
+                            Upload your official university or board syllabus PDF. EduMate processes the document without requiring tedious copy-pasting.
+                        </p>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="step-card">
+                        <div class="step-number">2</div>
+                        <h3 class="step-title">Review Extracted Units</h3>
+                        <p class="step-description">
+                            Verify detected subjects, units, and topics in the interactive review screen. Add, delete, or refine topics before saving.
+                        </p>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="step-card">
+                        <div class="step-number">3</div>
+                        <h3 class="step-title">Generate Study Roadmap</h3>
+                        <p class="step-description">
+                            Select your exam date and preferred study intensity. EduMate creates an evenly distributed, day-by-day learning roadmap.
+                        </p>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="step-card">
+                        <div class="step-number">4</div>
+                        <h3 class="step-title">Study &amp; Track Progress</h3>
+                        <p class="step-description">
+                            Follow your daily topics, get AI conceptual explanations when stuck, mark topics complete, and watch your progress grow.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- About EduMate Section -->
+        <section class="landing-section" id="about">
+            <div class="landing-container">
+                <div class="about-grid">
+                    <!-- Text Column -->
+                    <div class="about-text-col">
+                        <span class="section-label">Our Mission</span>
+                        <h3>Built Specifically for College &amp; University Students</h3>
+                        <p>
+                            Most students receive 30+ page syllabus PDFs at the start of each semester, but turn to unorganized notes and frantic cramming when exams approach. Generic to-do lists don't understand academic unit weights, and generic AI tools often invent topics that are not on the exam.
+                        </p>
+                        <p>
+                            EduMate was created to bridge this gap: grounding modern study planning and AI assistance strictly within your university's official curriculum.
+                        </p>
+
+                        <div class="about-principles">
+                            <div class="principle-item">
+                                <div class="principle-check">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                </div>
+                                <div class="principle-content">
+                                    <strong>Curriculum Integrity</strong>
+                                    <span>We extract actual syllabus content only &mdash; no fake or hallucinated curriculum data.</span>
+                                </div>
+                            </div>
+                            <div class="principle-item">
+                                <div class="principle-check">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                </div>
+                                <div class="principle-content">
+                                    <strong>Student Control</strong>
+                                    <span>Every extracted topic and unit is editable by the student before being saved to the database.</span>
+                                </div>
+                            </div>
+                            <div class="principle-item">
+                                <div class="principle-check">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                </div>
+                                <div class="principle-content">
+                                    <strong>Sustainable Pacing</strong>
+                                    <span>Daily milestones replace last-minute cramming with steady, measurable academic consistency.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Supporting Column -->
+                    <div class="about-card-col">
+                        <div class="quote-highlight">
+                            <p>&ldquo;Structured preparation turns overwhelming academic goals into manageable daily achievements.&rdquo;</p>
+                            <span class="quote-author">&mdash; EduMate Academic Design Principles</span>
+                        </div>
+
+                        <div class="academic-pillars">
+                            <div class="pillar-box">
+                                <h4 class="pillar-box-title">Syllabus-Grounded</h4>
+                                <p class="pillar-box-desc">Preserves exact university unit wording and topic structure.</p>
+                            </div>
+                            <div class="pillar-box">
+                                <h4 class="pillar-box-title">Transparent Logic</h4>
+                                <p class="pillar-box-desc">Every roadmap date and topic assignment is fully visible and reversible.</p>
+                            </div>
+                            <div class="pillar-box">
+                                <h4 class="pillar-box-title">Focused UI</h4>
+                                <p class="pillar-box-desc">Zero distracting social feeds, intrusive ads, or irrelevant gamification.</p>
+                            </div>
+                            <div class="pillar-box">
+                                <h4 class="pillar-box-title">Secure &amp; Private</h4>
+                                <p class="pillar-box-desc">Individual student academic data is strictly isolated and password-protected.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Call to Action Banner -->
+        <section class="cta-section">
+            <div class="landing-container">
+                <div class="cta-box">
+                    <h2 class="cta-title">Start Studying with Clarity Today</h2>
+                    <p class="cta-subtitle">
+                        Turn your university syllabus into a clear, day-by-day roadmap and take the anxiety out of semester exam preparation.
+                    </p>
+                    <div class="cta-buttons">
+                        {% if current_user.is_authenticated %}
+                            {% if current_user.is_admin %}
+                                <a href="{{ url_for('admin.dashboard') }}" class="btn-landing btn-landing-primary">Open Admin Dashboard</a>
+                            {% else %}
+                                <a href="{{ url_for('dashboard') }}" class="btn-landing btn-landing-primary">Open My Dashboard</a>
+                            {% endif %}
+                        {% else %}
+                            <a href="{{ url_for('auth.register') }}" class="btn-landing btn-landing-primary">Create Free Account</a>
+                            <a href="{{ url_for('auth.login') }}" class="btn-landing btn-landing-secondary">Log In to Existing Account</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="landing-footer">
+        <div class="landing-container">
+            <div class="footer-top">
+                <!-- Col 1: Brand -->
+                <div class="footer-brand-col">
+                    <div class="landing-brand">
+                        <div class="brand-icon-box">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                                <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                            </svg>
+                        </div>
+                        <div class="brand-name-group">
+                            <span class="brand-title">EduMate</span>
+                            <span class="brand-tag">Smart Study Planner</span>
+                        </div>
+                    </div>
+                    <p>
+                        A focused academic study planning platform designed to help students master their curriculum with clarity and confidence.
+                    </p>
+                </div>
+
+                <!-- Col 2: Navigation -->
+                <div>
+                    <h4 class="footer-col-title">Navigation</h4>
+                    <ul class="footer-link-list">
+                        <li><a href="#hero">Home</a></li>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#how-it-works">How It Works</a></li>
+                        <li><a href="#about">About EduMate</a></li>
+                    </ul>
+                </div>
+
+                <!-- Col 3: Academic Tools -->
+                <div>
+                    <h4 class="footer-col-title">Tools</h4>
+                    <ul class="footer-link-list">
+                        <li><a href="#features">Syllabus Extractor</a></li>
+                        <li><a href="#features">Roadmap Planner</a></li>
+                        <li><a href="#features">AI Study Assistant</a></li>
+                        <li><a href="#features">Progress Tracker</a></li>
+                    </ul>
+                </div>
+
+                <!-- Col 4: Account -->
+                <div>
+                    <h4 class="footer-col-title">Account</h4>
+                    <ul class="footer-link-list">
+                        {% if current_user.is_authenticated %}
+                            <li><a href="{{ url_for('dashboard') }}">My Dashboard</a></li>
+                            <li><a href="{{ url_for('auth.logout') }}">Log Out</a></li>
+                        {% else %}
+                            <li><a href="{{ url_for('auth.login') }}">Student Login</a></li>
+                            <li><a href="{{ url_for('auth.register') }}">Create Account</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <span>&copy; 2026 EduMate. Built for focused student learning. All rights reserved.</span>
+                <span>Grounding study plans in official university curricula.</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Interactive Mobile Nav Script -->
+    <script>
+        (function() {
+            var toggleBtn = document.getElementById('mobileNavToggle');
+            var navMenu = document.getElementById('landingNavMenu');
+            if (toggleBtn && navMenu) {
+                toggleBtn.addEventListener('click', function() {
+                    navMenu.classList.toggle('is-open');
+                });
+                // Close menu when clicking on nav link
+                var navLinks = navMenu.querySelectorAll('a');
+                navLinks.forEach(function(link) {
+                    link.addEventListener('click', function() {
+                        navMenu.classList.remove('is-open');
+                    });
+                });
+            }
+        })();
+    </script>
+</body>
+</html>

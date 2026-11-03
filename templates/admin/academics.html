@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+
+{% block title %}Academics & Roadmap Management — EduMate Admin{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+        <div>
+            <h1 class="welcome-title">Academic & Exam Management</h1>
+            <p class="welcome-subtitle">Manage coursework, subjects, syllabus topics, roadmap milestones, and official entrance exams directory</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn btn-outline" onclick="document.getElementById('createExamModal').style.display='flex'">
+                + Add Official Exam
+            </button>
+            <button type="button" class="btn btn-primary" onclick="document.getElementById('createSubjectModal').style.display='flex'">
+                + Add Subject for Student
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter & Search Bar -->
+    <div class="card" style="margin-bottom: 20px; padding: 16px 20px;">
+        <form method="GET" action="{{ url_for('admin.academics_list') }}" style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;">
+            <div style="flex: 2; min-width: 220px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Search Subjects</label>
+                <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Search by subject name...">
+            </div>
+
+            <div style="flex: 1; min-width: 180px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Filter by Student</label>
+                <select name="student_id" class="form-control">
+                    <option value="">All Students</option>
+                    {% for st in students %}
+                    <option value="{{ st.id }}" {% if student_id == st.id %}selected{% endif %}>{{ st.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button type="submit" class="btn btn-primary" style="padding: 10px 18px;">Filter</button>
+                {% if search or student_id %}
+                <a href="{{ url_for('admin.academics_list') }}" class="btn btn-outline" style="padding: 10px 14px;">Clear</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- Subjects Management Table -->
+    <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header">
+            <h2 class="card-title">All Coursework Subjects ({{ subjects|length }} Total)</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Subject Name</th>
+                        <th>Code</th>
+                        <th>Student Owner</th>
+                        <th>Total Topics</th>
+                        <th>Progress</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if subjects %}
+                        {% for s in subjects %}
+                        <tr>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: {{ s.color }};"></span>
+                                    <strong>{{ s.name }}</strong>
+                                </div>
+                            </td>
+                            <td><code>{{ s.code }}</code></td>
+                            <td>
+                                <a href="{{ url_for('admin.user_detail', user_id=s.student.id) }}" style="color: var(--primary);">
+                                    {{ s.student.username }}
+                                </a>
+                            </td>
+                            <td>{{ s.total_topics }} topics</td>
+                            <td>
+                                <span class="pill-badge" style="background-color: {{ s.color }}18; color: {{ s.color }};">
+                                    {{ s.progress_percentage }}%
+                                </span>
+                            </td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <a href="{{ url_for('admin.subject_topics_view', subject_id=s.id) }}" class="btn btn-outline btn-sm">
+                                    Manage Topics &rarr;
+                                </a>
+                                <form method="POST" action="{{ url_for('admin.delete_academic_subject', subject_id=s.id) }}" style="display: inline-block; margin-left: 4px;" onsubmit="return confirm('Delete subject {{ s.name }}? All topics and roadmaps under it will be removed.');">
+                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="6" class="text-muted" style="text-align: center; padding: 24px;">No subjects found matching your criteria.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Official Exam Directory CRUD Section -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Official Entrance & Competitive Exams Directory ({{ official_exams|length }})</h2>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Exam Code</th>
+                        <th>Exam Full Name</th>
+                        <th>Authority</th>
+                        <th>Category</th>
+                        <th>Verified Source Link</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exam in official_exams %}
+                    <tr>
+                        <td><strong>{{ exam.exam_code }}</strong></td>
+                        <td>{{ exam.exam_name }}</td>
+                        <td class="text-muted-sm">{{ exam.conducting_authority }}</td>
+                        <td><span class="pill-badge pill-neutral">{{ exam.category }}</span></td>
+                        <td>
+                            <a href="{{ exam.official_portal_url }}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: underline;">
+                                Official Portal &nearr;
+                            </a>
+                        </td>
+                        <td><span class="status-badge status-completed">{{ exam.verification_status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 1: Create Subject for Student -->
+<div class="modal-backdrop" id="createSubjectModal" style="display: none;">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Add Coursework Subject</h3>
+            <button type="button" class="modal-close-btn" onclick="document.getElementById('createSubjectModal').style.display='none'">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin.create_academic_subject') }}">
+            <div class="form-group">
+                <label for="subStudent">Assign to Student <span class="text-danger">*</span></label>
+                <select id="subStudent" name="student_id" class="form-control" required>
+                    <option value="">-- Choose Student --</option>
+                    {% for st in students %}
+                    <option value="{{ st.id }}">{{ st.username }} ({{ st.email }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="subName">Subject Name <span class="text-danger">*</span></label>
+                <input type="text" id="subName" name="name" class="form-control" placeholder="e.g. Distributed Systems" required>
+            </div>
+            <div class="form-group">
+                <label for="subCode">Subject Code <span class="text-danger">*</span></label>
+                <input type="text" id="subCode" name="code" class="form-control" placeholder="e.g. DS501" required>
+            </div>
+            <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label for="subColor">Color Accent</label>
+                    <select id="subColor" name="color" class="form-control">
+                        <option value="#2563eb">Blue</option>
+                        <option value="#10b981">Green</option>
+                        <option value="#f59e0b">Orange</option>
+                        <option value="#8b5cf6">Purple</option>
+                        <option value="#ef4444">Red</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="subIcon">Icon</label>
+                    <select id="subIcon" name="icon" class="form-control">
+                        <option value="book">Book</option>
+                        <option value="cpu">CPU</option>
+                        <option value="gear">Gear</option>
+                        <option value="database">Database</option>
+                        <option value="pi">Pi</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('createSubjectModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Subject</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal 2: Create Official Exam Entry -->
+<div class="modal-backdrop" id="createExamModal" style="display: none;">
+    <div class="modal-box" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3>Add Verified Official Exam</h3>
+            <button type="button" class="modal-close-btn" onclick="document.getElementById('createExamModal').style.display='none'">&times;</button>
+        </div>
+        <form method="POST" action="{{ url_for('admin.create_official_exam') }}">
+            <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
+                <div class="form-group">
+                    <label for="examCode">Code <span class="text-danger">*</span></label>
+                    <input type="text" id="examCode" name="exam_code" class="form-control" placeholder="e.g. NEET" required>
+                </div>
+                <div class="form-group">
+                    <label for="examName">Full Exam Name <span class="text-danger">*</span></label>
+                    <input type="text" id="examName" name="exam_name" class="form-control" placeholder="e.g. National Eligibility Cum Entrance Test" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="examAuth">Conducting Authority <span class="text-danger">*</span></label>
+                <input type="text" id="examAuth" name="conducting_authority" class="form-control" placeholder="e.g. National Testing Agency (NTA)" required>
+            </div>
+            <div class="form-group">
+                <label for="examCat">Category</label>
+                <select id="examCat" name="category" class="form-control">
+                    <option value="Engineering & Technology">Engineering & Technology</option>
+                    <option value="Medical & Science">Medical & Science</option>
+                    <option value="Management & Business">Management & Business</option>
+                    <option value="Civil & Administrative Services">Civil & Administrative Services</option>
+                    <option value="Research & Academic Fellowships">Research & Academic Fellowships</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="examUrl">Official Portal URL <span class="text-danger">*</span></label>
+                <input type="url" id="examUrl" name="official_portal_url" class="form-control" placeholder="https://neet.nta.nic.in" required>
+            </div>
+            <div class="form-group">
+                <label for="examElig">Eligibility Summary</label>
+                <input type="text" id="examElig" name="eligibility_summary" class="form-control" placeholder="e.g. 10+2 with Physics, Chemistry, Biology">
+            </div>
+            <div class="form-group">
+                <label for="examNote">Notification Note</label>
+                <input type="text" id="examNote" name="official_notification_note" class="form-control" placeholder="e.g. Check official NTA bulletin for application deadlines">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('createExamModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save to Directory</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

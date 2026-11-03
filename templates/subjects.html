@@ -1,26 +1,63 @@
 {% extends 'base.html' %}
 
-{% block title %}My Subjects — EduMate{% endblock %}
+{% block title %}My Subjects & Syllabus — EduMate{% endblock %}
 
 {% block content %}
 <div class="content-container">
-    <div class="admin-header-row">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px;">
         <div>
             <h1 class="welcome-title">My Subjects & Syllabus</h1>
-            <p class="welcome-subtitle">Manage coursework, track topic-by-topic completion, and plan units</p>
+            <p class="welcome-subtitle">Manage coursework, upload syllabus PDFs, track topic completion, and plan units</p>
         </div>
-        <button class="btn btn-primary" onclick="document.getElementById('addSubjectModal').style.display='flex'">+ Add Subject</button>
+        <div class="header-action-buttons" style="display: flex; gap: 10px; align-items: center;">
+            <button type="button" class="btn btn-outline" onclick="openUploadSyllabusModal()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Upload Syllabus PDF
+            </button>
+            <button type="button" class="btn btn-primary" onclick="openAddSubjectModal()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Subject
+            </button>
+        </div>
     </div>
 
-    <div class="subjects-cards-grid">
+    <!-- Quick Stats Overview Bar -->
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 24px;">
+        <div class="stat-card">
+            <span class="stat-label">Enrolled Subjects</span>
+            <div class="stat-value" id="statsTotalSubjects">{{ subjects|length }}</div>
+            <span class="stat-footnote">Active Coursework</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Total Syllabus Topics</span>
+            <div class="stat-value">
+                {% set total_topics_count = namespace(value=0) %}
+                {% for s in subjects %}{% set total_topics_count.value = total_topics_count.value + s.total_topics %}{% endfor %}
+                {{ total_topics_count.value }}
+            </div>
+            <span class="stat-footnote">Across all subjects</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Completed Topics</span>
+            <div class="stat-value" style="color: var(--success);">
+                {% set done_topics_count = namespace(value=0) %}
+                {% for s in subjects %}{% set done_topics_count.value = done_topics_count.value + s.completed_topics %}{% endfor %}
+                {{ done_topics_count.value }}
+            </div>
+            <span class="stat-footnote">Topic checks recorded</span>
+        </div>
+    </div>
+
+    <!-- Subjects Cards Grid -->
+    <div class="subjects-cards-grid" id="subjectsCardsContainer">
         {% if subjects %}
             {% for subj in subjects %}
-            <div class="card subject-detail-card">
+            <div class="card subject-detail-card" id="subject-card-{{ subj.id }}">
                 <div class="subject-card-top">
                     <div class="subject-lead">
                         <span class="subject-icon-box" style="background-color: {{ subj.color }}18; color: {{ subj.color }};">
                             {% if subj.icon == 'cpu' %}
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M9 20v3M15 1v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
                             {% elif subj.icon == 'gear' %}
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                             {% elif subj.icon == 'database' %}
@@ -47,48 +84,473 @@
 
                 <!-- Topics Accordion / List -->
                 <div class="topics-compact-list">
-                    {% for topic in subj.topics %}
-                    <div class="topic-compact-item">
-                        <label class="task-checkbox-label">
-                            <input type="checkbox" {% if topic.is_completed %}checked{% endif %} disabled>
-                            <span class="custom-checkbox"></span>
-                            <span class="{% if topic.is_completed %}text-strikethrough{% endif %}">{{ topic.title }}</span>
-                        </label>
-                    </div>
-                    {% endfor %}
+                    {% if subj.topics %}
+                        {% for topic in subj.topics %}
+                        <div class="topic-compact-item">
+                            <label class="task-checkbox-label" title="{{ 'Mark as Pending' if topic.is_completed else 'Mark as Completed' }}">
+                                <input type="checkbox" id="topic-chk-{{ topic.id }}" {% if topic.is_completed %}checked{% endif %} onchange="toggleSubjectTopic({{ topic.id }}, this)">
+                                <span class="custom-checkbox"></span>
+                                <span class="{% if topic.is_completed %}text-strikethrough{% endif %}" id="topic-title-{{ topic.id }}">{{ topic.title }}</span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-topics-notice">
+                            <span class="text-muted-sm">No topics added yet.</span>
+                            <button type="button" class="btn btn-outline btn-sm" onclick="openUploadSyllabusModal({{ subj.id }})" style="margin-top: 6px; padding: 3px 8px; font-size: 11.5px;">
+                                + Upload Syllabus PDF
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="subject-card-footer" style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                    <button type="button" class="btn-text-link" onclick="openUploadSyllabusModal({{ subj.id }})">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Add/Upload Topics
+                    </button>
+                    <a href="{{ url_for('roadmap_view') }}" class="btn-text-link" style="color: var(--primary);">
+                        Plan Roadmap &rarr;
+                    </a>
                 </div>
             </div>
             {% endfor %}
         {% else %}
             <div class="card empty-state" style="grid-column: 1 / -1; padding: 48px;">
                 <p>No subjects added yet. Add your first subject to begin tracking your syllabus.</p>
-                <button class="btn btn-primary" onclick="document.getElementById('addSubjectModal').style.display='flex'">+ Add Subject</button>
+                <button type="button" class="btn btn-primary" onclick="openAddSubjectModal()">+ Add Subject</button>
             </div>
         {% endif %}
     </div>
 </div>
 
-<!-- Modal for adding Subject -->
+<!-- Modal 1: Add Subject Modal -->
 <div class="modal-backdrop" id="addSubjectModal" style="display: none;">
     <div class="modal-box">
         <div class="modal-header">
             <h3>Add New Subject</h3>
-            <button type="button" class="modal-close-btn" onclick="document.getElementById('addSubjectModal').style.display='none'">&times;</button>
+            <button type="button" class="modal-close-btn" onclick="closeAddSubjectModal()">&times;</button>
         </div>
-        <form method="POST" action="{{ url_for('subjects_view') }}">
+        <form method="POST" action="{{ url_for('subjects_view') }}" id="addSubjectForm">
             <div class="form-group">
-                <label for="subName">Subject Name</label>
-                <input type="text" id="subName" name="name" class="form-control" placeholder="e.g. Artificial Intelligence" required>
+                <label for="subName">Subject Name <span class="text-danger">*</span></label>
+                <input type="text" id="subName" name="name" class="form-control" placeholder="e.g. Operating Systems" required>
             </div>
             <div class="form-group">
-                <label for="subCode">Subject Code</label>
-                <input type="text" id="subCode" name="code" class="form-control" placeholder="e.g. AI" required>
+                <label for="subCode">Subject Code / Abbreviation <span class="text-danger">*</span></label>
+                <input type="text" id="subCode" name="code" class="form-control" placeholder="e.g. OS or CS401" required>
+            </div>
+            <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label for="subColor">Color Accent</label>
+                    <select id="subColor" name="color" class="form-control">
+                        <option value="#2563eb">Blue</option>
+                        <option value="#10b981">Green</option>
+                        <option value="#f59e0b">Orange</option>
+                        <option value="#8b5cf6">Purple</option>
+                        <option value="#ef4444">Red</option>
+                        <option value="#06b6d4">Cyan</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="subIcon">Icon</label>
+                    <select id="subIcon" name="icon" class="form-control">
+                        <option value="book">Book (General)</option>
+                        <option value="cpu">CPU (Hardware/CS)</option>
+                        <option value="gear">Gear (Engineering)</option>
+                        <option value="database">Database (Data/Storage)</option>
+                        <option value="pi">Pi (Maths)</option>
+                    </select>
+                </div>
             </div>
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="document.getElementById('addSubjectModal').style.display='none'">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save Subject</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddSubjectModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="saveSubjectSubmitBtn">Save Subject</button>
             </div>
         </form>
     </div>
 </div>
+
+<!-- Modal 2: Syllabus PDF Upload & Topic Review Modal -->
+<div class="modal-backdrop" id="uploadSyllabusModal" style="display: none;">
+    <div class="modal-box" style="max-width: 580px; max-height: 90vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+            <div>
+                <h3 style="margin-bottom: 2px;">Upload Syllabus PDF</h3>
+                <span class="text-muted-sm">Extract topics automatically from official university syllabus document</span>
+            </div>
+            <button type="button" class="modal-close-btn" onclick="closeUploadSyllabusModal()">&times;</button>
+        </div>
+
+        <div class="modal-body-scroll" style="overflow-y: auto; padding-right: 4px;">
+            <!-- Step 1: Upload Form -->
+            <div id="syllabusUploadStep1">
+                <div class="form-group">
+                    <label for="syllabusSubjectSelect">Select Target Subject <span class="text-danger">*</span></label>
+                    <select id="syllabusSubjectSelect" class="form-control" required>
+                        <option value="">-- Loading Subjects... --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="syllabusPdfInput">Select Syllabus PDF Document <span class="text-danger">*</span></label>
+                    <div class="pdf-dropzone" id="pdfDropzone" onclick="document.getElementById('syllabusPdfInput').click();">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" style="margin-bottom: 8px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        <p class="dropzone-text" id="pdfDropzoneText">Click to choose a PDF file or drag and drop here</p>
+                        <span class="dropzone-hint">Standard text-based PDF up to 10 MB (Scanned image PDFs without selectable text require OCR)</span>
+                    </div>
+                    <input type="file" id="syllabusPdfInput" accept=".pdf,application/pdf" style="display: none;" onchange="handlePdfFileSelect(event)">
+                </div>
+
+                <!-- Error Alert Box -->
+                <div id="pdfUploadError" class="alert alert-danger" style="display: none; margin-top: 14px;">
+                    <span id="pdfUploadErrorText"></span>
+                </div>
+
+                <div class="modal-actions" style="margin-top: 18px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeUploadSyllabusModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="extractPdfBtn" onclick="submitPdfForExtraction()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        Extract Syllabus Topics
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Review and Edit Extracted Topics -->
+            <div id="syllabusUploadStep2" style="display: none;">
+                <div class="step-info-bar" style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 16px;">
+                    <div style="font-weight: 600; font-size: 13.5px; color: #1e40af;" id="extractedSummaryHeader">
+                        Extracted Topics
+                    </div>
+                    <p style="font-size: 12px; color: #3b82f6; margin-top: 2px;">
+                        Review the topics below before saving. You can edit any topic name or delete irrelevant lines.
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label style="font-weight: 600;">Topics List (<span id="topicsCountBadge">0</span> found)</label>
+                        <button type="button" class="btn-text-link" onclick="addNewTopicRow()" style="font-size: 12.5px;">+ Add Topic Line</button>
+                    </div>
+                    <div id="extractedTopicsList" class="extracted-topics-editor" style="display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; padding: 4px;">
+                        <!-- Dynamically filled with input rows -->
+                    </div>
+                </div>
+
+                <div class="form-options" style="margin: 16px 0 10px 0;">
+                    <label class="remember-label">
+                        <input type="checkbox" id="replaceExistingTopicsCheckbox" value="true">
+                        <span>Replace existing topics for this subject (instead of appending)</span>
+                    </label>
+                </div>
+
+                <!-- Save Error Alert -->
+                <div id="topicsSaveError" class="alert alert-danger" style="display: none;">
+                    <span id="topicsSaveErrorText"></span>
+                </div>
+
+                <div class="modal-actions" style="margin-top: 18px;">
+                    <button type="button" class="btn btn-secondary" onclick="backToStep1()">Back</button>
+                    <button type="button" class="btn btn-primary" id="saveTopicsBtn" onclick="saveExtractedTopics()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Confirm & Save to Subject
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Modal Controls for Add Subject
+function openAddSubjectModal() {
+    const modal = document.getElementById('addSubjectModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.getElementById('subName')?.focus();
+    }
+}
+
+function closeAddSubjectModal() {
+    const modal = document.getElementById('addSubjectModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Modal Controls for Upload Syllabus PDF
+let selectedPdfFile = null;
+let currentPreselectedSubjectId = null;
+
+async function openUploadSyllabusModal(preselectedSubjectId = null) {
+    currentPreselectedSubjectId = preselectedSubjectId;
+    const modal = document.getElementById('uploadSyllabusModal');
+    if (!modal) return;
+
+    modal.style.display = 'flex';
+    document.getElementById('syllabusUploadStep1').style.display = 'block';
+    document.getElementById('syllabusUploadStep2').style.display = 'none';
+    document.getElementById('pdfUploadError').style.display = 'none';
+    document.getElementById('topicsSaveError').style.display = 'none';
+    selectedPdfFile = null;
+
+    const fileInput = document.getElementById('syllabusPdfInput');
+    if (fileInput) fileInput.value = '';
+    const dropzoneText = document.getElementById('pdfDropzoneText');
+    if (dropzoneText) dropzoneText.innerText = 'Click to choose a PDF file or drag and drop here';
+
+    // Populate subject dropdown dynamically from database
+    await populateSubjectDropdown('syllabusSubjectSelect', preselectedSubjectId);
+}
+
+function closeUploadSyllabusModal() {
+    const modal = document.getElementById('uploadSyllabusModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function handlePdfFileSelect(event) {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+        selectedPdfFile = files[0];
+        document.getElementById('pdfDropzoneText').innerText = `Selected: ${selectedPdfFile.name} (${(selectedPdfFile.size / 1024).toFixed(1)} KB)`;
+        document.getElementById('pdfUploadError').style.display = 'none';
+    }
+}
+
+// Dynamic Subject Dropdown Loader
+async function populateSubjectDropdown(selectElementId, preselectedId = null) {
+    const selectElem = document.getElementById(selectElementId);
+    if (!selectElem) return;
+
+    selectElem.innerHTML = '<option value="">-- Choose Enrolled Subject --</option>';
+
+    try {
+        const response = await fetch('/api/subjects');
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
+        const data = await response.json();
+
+        if (data.success && data.subjects) {
+            if (data.subjects.length === 0) {
+                selectElem.innerHTML = '<option value="">No subjects found. Please add a subject first.</option>';
+                return;
+            }
+
+            data.subjects.forEach(subj => {
+                const opt = document.createElement('option');
+                opt.value = subj.id;
+                opt.textContent = `${subj.name} (${subj.code})`;
+                if (preselectedId && String(subj.id) === String(preselectedId)) {
+                    opt.selected = true;
+                }
+                selectElem.appendChild(opt);
+            });
+        }
+    } catch (err) {
+        console.error('Failed to load subjects dynamically:', err);
+        selectElem.innerHTML = '<option value="">Failed to load subjects</option>';
+    }
+}
+
+// Submit PDF for Extraction
+async function submitPdfForExtraction() {
+    const subjectSelect = document.getElementById('syllabusSubjectSelect');
+    const subjectId = subjectSelect.value;
+    const errorBox = document.getElementById('pdfUploadError');
+    const errorText = document.getElementById('pdfUploadErrorText');
+    const extractBtn = document.getElementById('extractPdfBtn');
+
+    if (!subjectId) {
+        errorText.innerText = 'Please select a subject to assign the syllabus topics.';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    if (!selectedPdfFile) {
+        errorText.innerText = 'Please select a syllabus PDF file to upload.';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    // Prepare FormData
+    const formData = new FormData();
+    formData.append('pdf_file', selectedPdfFile);
+    formData.append('subject_id', subjectId);
+
+    // Update UI state
+    extractBtn.disabled = true;
+    extractBtn.innerText = 'Extracting Topics from PDF...';
+    errorBox.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/syllabus/extract-pdf', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.review_url) {
+                // Seamlessly redirect to interactive syllabus review & approval interface
+                window.location.href = data.review_url;
+                return;
+            } else if (data.topics) {
+                renderExtractedTopicsEditor(data.topics, data.filename);
+                document.getElementById('syllabusUploadStep1').style.display = 'none';
+                document.getElementById('syllabusUploadStep2').style.display = 'block';
+            }
+        } else {
+            errorText.innerText = data.error || 'Failed to extract topics from the uploaded PDF.';
+            errorBox.style.display = 'block';
+        }
+    } catch (err) {
+        console.error('Error uploading PDF:', err);
+        errorText.innerText = 'Network error while uploading PDF. Please verify your connection and try again.';
+        errorBox.style.display = 'block';
+    } finally {
+        extractBtn.disabled = false;
+        extractBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Extract Syllabus Topics
+        `;
+    }
+}
+
+// Render Review/Edit List for Extracted Topics
+function renderExtractedTopicsEditor(topics, filename) {
+    const container = document.getElementById('extractedTopicsList');
+    const summaryHeader = document.getElementById('extractedSummaryHeader');
+    const countBadge = document.getElementById('topicsCountBadge');
+
+    summaryHeader.innerText = `Extracted from "${filename}"`;
+    countBadge.innerText = topics.length;
+    container.innerHTML = '';
+
+    topics.forEach((t, idx) => {
+        addTopicInputRow(container, t.title || t, idx);
+    });
+}
+
+function addTopicInputRow(container, titleText = '', idx = Date.now()) {
+    const row = document.createElement('div');
+    row.className = 'topic-edit-row';
+    row.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+    row.innerHTML = `
+        <span style="font-size: 11px; color: var(--text-muted); width: 24px; text-align: right;">${container.children.length + 1}.</span>
+        <input type="text" class="form-control topic-title-input" value="${escapeHtml(titleText)}" placeholder="Enter topic title" style="flex: 1; padding: 7px 10px; font-size: 13px;" required>
+        <button type="button" class="btn btn-outline btn-sm" onclick="this.parentElement.remove(); updateTopicCountBadge();" style="color: var(--danger-text); padding: 5px 8px;" title="Remove Topic">&times;</button>
+    `;
+    container.appendChild(row);
+    updateTopicCountBadge();
+}
+
+function addNewTopicRow() {
+    const container = document.getElementById('extractedTopicsList');
+    addTopicInputRow(container, '');
+    const inputs = container.querySelectorAll('.topic-title-input');
+    if (inputs.length > 0) {
+        inputs[inputs.length - 1].focus();
+    }
+}
+
+function updateTopicCountBadge() {
+    const container = document.getElementById('extractedTopicsList');
+    const countBadge = document.getElementById('topicsCountBadge');
+    if (container && countBadge) {
+        countBadge.innerText = container.querySelectorAll('.topic-title-input').length;
+    }
+}
+
+function backToStep1() {
+    document.getElementById('syllabusUploadStep2').style.display = 'none';
+    document.getElementById('syllabusUploadStep1').style.display = 'block';
+}
+
+// Save Extracted & Reviewed Topics to Subject in SQLite
+async function saveExtractedTopics() {
+    const subjectId = document.getElementById('syllabusSubjectSelect').value;
+    const replaceExisting = document.getElementById('replaceExistingTopicsCheckbox').checked;
+    const saveBtn = document.getElementById('saveTopicsBtn');
+    const errorBox = document.getElementById('topicsSaveError');
+    const errorText = document.getElementById('topicsSaveErrorText');
+
+    const inputs = document.querySelectorAll('.topic-title-input');
+    const topics = [];
+    inputs.forEach(input => {
+        const val = input.value.trim();
+        if (val) topics.push({ title: val });
+    });
+
+    if (topics.length === 0) {
+        errorText.innerText = 'Please keep at least one valid topic in the list before saving.';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.innerText = 'Saving Topics to Database...';
+    errorBox.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/syllabus/save-topics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                subject_id: parseInt(subjectId),
+                topics: topics,
+                replace_existing: replaceExisting
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            closeUploadSyllabusModal();
+            // Reload page to reflect updated subject counts and topics
+            window.location.reload();
+        } else {
+            errorText.innerText = data.error || 'Failed to save syllabus topics.';
+            errorBox.style.display = 'block';
+        }
+    } catch (err) {
+        console.error('Save topics error:', err);
+        errorText.innerText = 'Connection error while saving topics. Please try again.';
+        errorBox.style.display = 'block';
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Confirm & Save to Subject
+        `;
+    }
+}
+
+async function toggleSubjectTopic(topicId, inputEl) {
+    try {
+        const resp = await fetch(`/api/topic/status/${topicId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: inputEl.checked ? 'completed' : 'pending' })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            const titleEl = document.getElementById(`topic-title-${topicId}`);
+            if (titleEl) {
+                if (data.is_completed) titleEl.classList.add('text-strikethrough');
+                else titleEl.classList.remove('text-strikethrough');
+            }
+        } else {
+            inputEl.checked = !inputEl.checked;
+            alert(data.error || 'Failed to update topic status.');
+        }
+    } catch (e) {
+        inputEl.checked = !inputEl.checked;
+        alert('Connection error. Please try again.');
+    }
+}
+</script>
 {% endblock %}
