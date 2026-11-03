@@ -1,153 +1,230 @@
 {% extends 'base.html' %}
 
-{% block title %}Admin Panel — EduMate{% endblock %}
+{% block title %}Admin Overview — EduMate Control Center{% endblock %}
 
 {% block content %}
-<div class="admin-container">
-    <div class="admin-header-row">
+<div class="content-container">
+    <!-- Top Header -->
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 24px;">
         <div>
-            <h1 class="welcome-title">Admin Dashboard</h1>
-            <p class="welcome-subtitle">Platform health, user oversight, and database monitoring</p>
+            <h1 class="welcome-title">Admin Control Center</h1>
+            <p class="welcome-subtitle">Platform overview, database metrics, user management, and system operations</p>
         </div>
-        <div class="admin-badge-pill">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <span>Administrator Access Enforced</span>
-        </div>
-    </div>
-
-    <!-- Metrics Summary Cards -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-icon-wrapper bg-blue-subtle">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <div class="admin-badge-pill">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>Admin Level Protected</span>
             </div>
-            <div class="stat-info">
-                <span class="stat-label">Total Users</span>
-                <span class="stat-value">{{ total_users }}</span>
-                <span class="stat-footnote">{{ total_students }} Students, {{ total_admins }} Admin</span>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon-wrapper bg-green-subtle">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            </div>
-            <div class="stat-info">
-                <span class="stat-label">Active Accounts</span>
-                <span class="stat-value">{{ active_users }}</span>
-                <span class="stat-footnote">Eligible for login</span>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon-wrapper bg-purple-subtle">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            </div>
-            <div class="stat-info">
-                <span class="stat-label">Total Subjects</span>
-                <span class="stat-value">{{ total_subjects }}</span>
-                <span class="stat-footnote">Across all students</span>
-            </div>
-        </div>
-
-        <div class="stat-card">
-            <div class="stat-icon-wrapper bg-pink-subtle">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            </div>
-            <div class="stat-info">
-                <span class="stat-label">Tasks & Exams</span>
-                <span class="stat-value">{{ total_tasks }} / {{ total_exams }}</span>
-                <span class="stat-footnote">Tasks / Exam milestones</span>
-            </div>
+            {% if health_info.maintenance_mode %}
+            <span class="pill-badge pill-important" style="padding: 6px 12px; font-size: 12px;">Maintenance Mode Active</span>
+            {% endif %}
         </div>
     </div>
 
-    <!-- Registered Users Management Table -->
-    <div class="card" style="margin-top: 24px;">
+    <!-- Phase 1: High-Level Platform Metrics Grid -->
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 24px;">
+        <!-- Card 1: Users -->
+        <div class="stat-card">
+            <span class="stat-label">Total Registered Users</span>
+            <div class="stat-value">{{ total_users }}</div>
+            <span class="stat-footnote">{{ active_users }} Active &bull; {{ inactive_users }} Inactive</span>
+        </div>
+
+        <!-- Card 2: Students & Admins -->
+        <div class="stat-card">
+            <span class="stat-label">User Roles</span>
+            <div class="stat-value" style="color: var(--primary);">{{ total_students }}</div>
+            <span class="stat-footnote">Students ({{ total_admins }} Administrator{{ 's' if total_admins != 1 }})</span>
+        </div>
+
+        <!-- Card 3: Subjects & Topics -->
+        <div class="stat-card">
+            <span class="stat-label">Academic Content</span>
+            <div class="stat-value" style="color: var(--success);">{{ total_subjects }}</div>
+            <span class="stat-footnote">{{ total_topics }} Syllabus Topics tracked</span>
+        </div>
+
+        <!-- Card 4: Roadmaps & Tasks -->
+        <div class="stat-card">
+            <span class="stat-label">Generated Roadmaps</span>
+            <div class="stat-value" style="color: var(--purple);">{{ total_roadmaps }}</div>
+            <span class="stat-footnote">{{ total_tasks }} Tasks &bull; {{ total_exams }} Exams</span>
+        </div>
+
+        <!-- Card 5: PDFs Processed -->
+        <div class="stat-card">
+            <span class="stat-label">Syllabus PDF Documents</span>
+            <div class="stat-value" style="color: #06b6d4;">{{ total_pdfs }}</div>
+            <span class="stat-footnote">Uploaded & Documented</span>
+        </div>
+    </div>
+
+    <!-- Quick Navigation Hub -->
+    <div class="card" style="margin-bottom: 24px; padding: 18px 22px;">
+        <div class="card-header" style="margin-bottom: 12px;">
+            <h3 class="card-title" style="font-size: 15px;">Management Subsystems</h3>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+            <a href="{{ url_for('admin.users_list') }}" class="btn btn-outline" style="justify-content: flex-start; padding: 10px 14px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                Users Directory &rarr;
+            </a>
+            <a href="{{ url_for('admin.academics_list') }}" class="btn btn-outline" style="justify-content: flex-start; padding: 10px 14px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                Academics &amp; Exams &rarr;
+            </a>
+            <a href="{{ url_for('admin.pdf_management_view') }}" class="btn btn-outline" style="justify-content: flex-start; padding: 10px 14px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                PDF &amp; OCR Manager &rarr;
+            </a>
+            <a href="{{ url_for('admin.system_control_view') }}" class="btn btn-outline" style="justify-content: flex-start; padding: 10px 14px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                System &amp; Backups &rarr;
+            </a>
+            <a href="{{ url_for('admin.audit_logs_view') }}" class="btn btn-outline" style="justify-content: flex-start; padding: 10px 14px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Audit Trail Logs &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- 2-Column Split: Recent Registrations & System Health -->
+    <div class="two-column-row" style="margin-bottom: 24px;">
+        <!-- Left: Recent Registrations -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Recent User Registrations</h2>
+                <a href="{{ url_for('admin.users_list') }}" class="card-header-link">View All Directory &rarr;</a>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Joined</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if recent_users %}
+                            {% for u in recent_users %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('admin.user_detail', user_id=u.id) }}" style="font-weight: 600; color: var(--primary);">
+                                        {{ u.username }}
+                                    </a>
+                                    <div class="text-muted-sm">{{ u.email }}</div>
+                                </td>
+                                <td>
+                                    <span class="pill-badge {% if u.role == 'admin' %}pill-important{% else %}pill-neutral{% endif %}">
+                                        {{ u.role|capitalize }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if u.is_active %}
+                                    <span class="status-badge status-completed">Active</span>
+                                    {% else %}
+                                    <span class="status-badge status-pending">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted-sm">{{ u.created_at.strftime('%d %b %Y') }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="4" class="text-muted" style="text-align: center; padding: 20px;">No registered users found.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Right: System Health & Diagnostics -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Database &amp; Platform Health</h2>
+                <a href="{{ url_for('admin.system_control_view') }}" class="card-header-link">System Settings &rarr;</a>
+            </div>
+            <div class="system-health-grid" style="grid-template-columns: 1fr 1fr; gap: 14px;">
+                <div class="health-item">
+                    <span class="health-label">Database Engine</span>
+                    <span class="health-val">{{ health_info.database_type }}</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">Database File Size</span>
+                    <span class="health-val">{{ health_info.database_size_kb }} KB</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">SQLite Version</span>
+                    <span class="health-val">v{{ health_info.sqlite_version }}</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">Maintenance Mode</span>
+                    <span class="health-val {% if health_info.maintenance_mode %}text-danger{% else %}text-success{% endif %}">
+                        {{ 'Enabled' if health_info.maintenance_mode else 'Disabled' }}
+                    </span>
+                </div>
+                {% if ai_status %}
+                <div class="health-item" style="grid-column: 1 / -1;">
+                    <span class="health-label">AI Engine Configuration</span>
+                    <span class="health-val" style="font-size: 13px;">
+                        {% if ai_status.primary.configured %}
+                            <span class="text-success">✓ Gemini Primary ({{ ai_status.primary.model }})</span>
+                        {% else %}
+                            <span class="text-muted">Gemini: Key Not Set</span>
+                        {% endif %}
+                        &bull;
+                        {% if ai_status.fallback.reachable and ai_status.fallback.model_ready %}
+                            <span class="text-success">✓ Ollama Ready ({{ ai_status.fallback.model }})</span>
+                        {% else %}
+                            <span class="text-muted">Ollama: Offline</span>
+                        {% endif %}
+                    </span>
+                </div>
+                {% endif %}
+                <div class="health-item" style="grid-column: 1 / -1;">
+                    <span class="health-label">Access Enforcement</span>
+                    <span class="health-val text-success">✓ Server-Side RBAC &amp; Session Isolation Active</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Audit Logs Table -->
+    <div class="card">
         <div class="card-header">
-            <h2 class="card-title">User Accounts Directory</h2>
-            <span class="text-muted-sm">{{ users|length }} Total Registered</span>
+            <h2 class="card-title">Recent Administrative Activity Log</h2>
+            <a href="{{ url_for('admin.audit_logs_view') }}" class="card-header-link">View Full Audit Trail &rarr;</a>
         </div>
         <div class="table-responsive">
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>User</th>
-                        <th>Email</th>
-                        <th>Role</th>
-                        <th>Status</th>
-                        <th>Joined</th>
-                        <th style="text-align: right;">Actions</th>
+                        <th>Timestamp</th>
+                        <th>Admin User</th>
+                        <th>Action</th>
+                        <th>Target</th>
+                        <th>Details</th>
+                        <th>IP Address</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for u in users %}
-                    <tr>
-                        <td>#{{ u.id }}</td>
-                        <td>
-                            <strong>{{ u.username }}</strong>
-                            {% if u.id == current_user.id %}
-                            <span class="pill-badge pill-info" style="margin-left: 6px;">You</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ u.email }}</td>
-                        <td>
-                            <span class="pill-badge {% if u.role == 'admin' %}pill-important{% else %}pill-neutral{% endif %}">
-                                {{ u.role|capitalize }}
-                            </span>
-                        </td>
-                        <td>
-                            {% if u.is_active %}
-                            <span class="status-badge status-completed">Active</span>
-                            {% else %}
-                            <span class="status-badge status-pending">Deactivated</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ u.created_at.strftime('%d %b %Y') }}</td>
-                        <td style="text-align: right;">
-                            {% if u.id != current_user.id %}
-                            <form method="POST" action="{{ url_for('admin.toggle_user', user_id=u.id) }}" style="display: inline-block;">
-                                <button type="submit" class="btn btn-outline btn-sm">
-                                    {% if u.is_active %}Deactivate{% else %}Activate{% endif %}
-                                </button>
-                            </form>
-                            <form method="POST" action="{{ url_for('admin.delete_user', user_id=u.id) }}" style="display: inline-block; margin-left: 4px;" onsubmit="return confirm('Are you sure you want to permanently delete user {{ u.username }}?');">
-                                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                            </form>
-                            {% else %}
-                            <span class="text-muted-sm">Current Admin</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
+                    {% if recent_activities %}
+                        {% for log in recent_activities %}
+                        <tr>
+                            <td class="text-muted-sm">{{ log.created_at.strftime('%d %b %Y %H:%M:%S') }}</td>
+                            <td><strong>{{ log.admin_username }}</strong></td>
+                            <td><span class="pill-badge pill-info">{{ log.action }}</span></td>
+                            <td>{{ log.target_type or '—' }} {% if log.target_id %}#{{ log.target_id }}{% endif %}</td>
+                            <td style="font-size: 13px;">{{ log.details or '—' }}</td>
+                            <td class="text-muted-sm">{{ log.ip_address or '127.0.0.1' }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="6" class="text-muted" style="text-align: center; padding: 24px;">No audit log records recorded yet.</td></tr>
+                    {% endif %}
                 </tbody>
             </table>
-        </div>
-    </div>
-
-    <!-- System Health & Database Diagnostics -->
-    <div class="card" style="margin-top: 24px;">
-        <div class="card-header">
-            <h2 class="card-title">System & Database Health</h2>
-        </div>
-        <div class="system-health-grid">
-            <div class="health-item">
-                <span class="health-label">Database Engine</span>
-                <span class="health-val">{{ health_info.database_type }} (v{{ health_info.sqlite_version }})</span>
-            </div>
-            <div class="health-item">
-                <span class="health-label">Database Size</span>
-                <span class="health-val">{{ health_info.database_size_kb }} KB</span>
-            </div>
-            <div class="health-item">
-                <span class="health-label">Integrity Status</span>
-                <span class="health-val text-success">✓ {{ health_info.status }}</span>
-            </div>
-            <div class="health-item">
-                <span class="health-label">Role Isolation Check</span>
-                <span class="health-val text-success">✓ Server-side 403 Enforcement Enabled</span>
-            </div>
         </div>
     </div>
 </div>

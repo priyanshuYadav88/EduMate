@@ -1,36 +1,433 @@
 {% extends 'base.html' %}
 
-{% block title %}Quizzes — EduMate{% endblock %}
+{% block title %}Quizzes & Knowledge Checks — EduMate{% endblock %}
 
 {% block content %}
 <div class="content-container">
-    <div class="admin-header-row">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px;">
         <div>
             <h1 class="welcome-title">Practice Quizzes & Self-Assessment</h1>
-            <p class="welcome-subtitle">Test conceptual recall across your enrolled subjects</p>
+            <p class="welcome-subtitle">Generate interactive 5-question multiple choice drills powered by EduMate AI with instant scoring</p>
         </div>
     </div>
 
-    <div class="stats-grid" style="margin-top: 16px;">
+    <!-- Active Subjects Cards -->
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); margin-top: 18px; gap: 18px;">
         {% for subj in subjects %}
-        <div class="card" style="padding: 20px;">
-            <div class="subject-lead">
-                <span class="subject-icon-box" style="background-color: {{ subj.color }}18; color: {{ subj.color }};">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-                </span>
-                <div>
-                    <h3 class="subject-card-title">{{ subj.name }}</h3>
-                    <span class="text-muted-sm">{{ subj.topics|length }} syllabus topics available</span>
+        <div class="card" style="padding: 22px; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+                <div class="subject-lead">
+                    <span class="subject-icon-box" style="background-color: {{ subj.color }}18; color: {{ subj.color }};">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+                    </span>
+                    <div>
+                        <h3 class="subject-card-title">{{ subj.name }}</h3>
+                        <span class="text-muted-sm">{{ subj.code }} &bull; {{ subj.topics|length }} syllabus topics</span>
+                    </div>
+                </div>
+
+                <div style="margin: 16px 0 14px 0;">
+                    <label for="topicSelect-{{ subj.id }}" class="form-label" style="font-size: 12.5px; font-weight: 600;">Choose Topic for Drill:</label>
+                    {% if subj.topics %}
+                    <select id="topicSelect-{{ subj.id }}" class="form-control" style="font-size: 13px; padding: 7px 10px;">
+                        {% for t in subj.topics %}
+                        <option value="{{ t.id }}" data-topic-title="{{ t.title }}">
+                            {{ t.unit_name ~ ': ' if t.unit_name else '' }}{{ t.title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% else %}
+                    <div style="padding: 10px; background-color: #f8fafc; border: 1px dashed var(--border-color); border-radius: var(--radius-sm); font-size: 12.5px; color: var(--text-muted);">
+                        No topics added yet. <a href="{{ url_for('subjects_view') }}" style="color: var(--primary);">Add topics</a> to enable quizzes.
+                    </div>
+                    {% endif %}
                 </div>
             </div>
-            <p style="font-size: 13px; color: var(--text-secondary); margin: 16px 0 20px 0;">
-                Generate quick 5-question viva drills or practice multiple-choice questions for {{ subj.name }}.
-            </p>
-            <button class="btn btn-outline btn-block" onclick="alert('Feature linked with AI Study Assistant! Try prompt: Give me 5 quiz questions on {{ subj.code }}')">
-                Start Practice Drill
-            </button>
+
+            <div>
+                {% if subj.topics %}
+                <button type="button" class="btn btn-primary btn-block" onclick="launchQuizModal({{ subj.id }}, '{{ subj.name }}')">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Start 5-Question MCQ Drill
+                </button>
+                {% else %}
+                <button type="button" class="btn btn-outline btn-block" disabled>
+                    Syllabus Topics Required
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="card" style="padding: 36px; text-align: center; grid-column: 1 / -1;">
+            <p class="text-muted">No enrolled subjects found. Please add your coursework subjects first.</p>
+            <a href="{{ url_for('subjects_view') }}" class="btn btn-primary btn-sm" style="margin-top: 10px;">Go to Subjects &rarr;</a>
         </div>
         {% endfor %}
     </div>
+
+    <!-- Past Quiz Attempts Table -->
+    <div class="card" style="margin-top: 28px;">
+        <div class="card-header">
+            <h2 class="card-title">Recent Quiz Attempts & Performance History</h2>
+            <span class="text-muted-sm">Persistent records stored in SQLite database</span>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Topic / Quiz Title</th>
+                        <th>Score</th>
+                        <th>Percentage</th>
+                        <th>Attempt Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if recent_attempts %}
+                        {% for att in recent_attempts %}
+                        <tr>
+                            <td>
+                                {% if att.subject %}
+                                <span class="pill-badge" style="background-color: {{ att.subject.color }}18; color: {{ att.subject.color }};">
+                                    {{ att.subject.code }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted-sm">General</span>
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ att.title }}</strong></td>
+                            <td>{{ att.score }} / {{ att.total_questions }}</td>
+                            <td>
+                                {% set pct = ((att.score / att.total_questions) * 100)|round|int if att.total_questions > 0 else 0 %}
+                                <span class="status-badge {% if pct >= 70 %}status-completed{% else %}status-pending{% endif %}">
+                                    {{ pct }}%
+                                </span>
+                            </td>
+                            <td class="text-muted-sm">{{ att.created_at.strftime('%d %b %Y %H:%M') }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="text-muted" style="text-align: center; padding: 32px;">
+                                No quiz attempts recorded yet. Select any subject above to begin your first practice drill!
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
+
+<!-- Interactive Quiz Modal -->
+<div class="modal-overlay" id="quizModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 1050; align-items: center; justify-content: center; padding: 16px;">
+    <div class="modal-card card" style="max-width: 680px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+        <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h3 id="quizModalTitle" class="card-title" style="margin: 0; font-size: 16px;">Practice MCQ Drill</h3>
+                <span id="quizModalSubtitle" class="text-muted-sm" style="display: block; margin-top: 2px;">Subject & Topic</span>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="closeQuizModal()" style="border: none; font-size: 18px; line-height: 1; padding: 4px 8px;">&times;</button>
+        </div>
+
+        <div id="quizModalBody" style="padding: 20px; overflow-y: auto; flex: 1;">
+            <!-- Loading State -->
+            <div id="quizLoadingState" style="text-align: center; padding: 40px 20px;">
+                <div style="display: inline-block; width: 36px; height: 36px; border: 3px solid #e2e8f0; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                <p style="margin-top: 14px; font-weight: 500; color: var(--text-primary);">Generating 5 syllabus questions with EduMate AI...</p>
+                <span class="text-muted-sm">Extracting key concepts, formulas, and definitions</span>
+            </div>
+
+            <!-- Error State -->
+            <div id="quizErrorState" style="display: none; text-align: center; padding: 30px 20px;">
+                <div class="alert alert-danger" id="quizErrorMessage" style="margin-bottom: 16px;">Unable to generate quiz.</div>
+                <button type="button" class="btn btn-outline" onclick="closeQuizModal()">Close</button>
+            </div>
+
+            <!-- Active Questions Form -->
+            <div id="quizQuestionsContainer" style="display: none;">
+                <form id="quizForm" onsubmit="handleQuizSubmit(event)">
+                    <div id="questionsList" style="display: flex; flex-direction: column; gap: 20px;"></div>
+                    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                        <span class="text-muted-sm">All 5 questions are compulsory.</span>
+                        <button type="submit" id="submitQuizBtn" class="btn btn-primary">
+                            Submit & Score Quiz &rarr;
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Quiz Results Score Card -->
+            <div id="quizResultsContainer" style="display: none;">
+                <div style="background-color: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 22px; text-align: center; margin-bottom: 20px;">
+                    <span class="stat-label">Your Final Drill Score</span>
+                    <div id="quizScoreDisplay" style="font-size: 38px; font-weight: 800; color: var(--primary); margin: 6px 0;">
+                        0 / 5
+                    </div>
+                    <p id="quizScoreFeedback" style="font-weight: 600; color: var(--text-secondary); margin: 0;"></p>
+                </div>
+
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary);">Answer Breakdown & Conceptual Explanations</h4>
+                <div id="quizReviewList" style="display: flex; flex-direction: column; gap: 16px;"></div>
+
+                <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-outline" onclick="closeQuizModal()">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="retakeCurrentQuiz()">Retake Drill</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.question-block {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px;
+}
+.question-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+.option-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    margin-bottom: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.15s ease;
+}
+.option-label:hover {
+    background-color: #f8fafc;
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentActiveTopicId = null;
+let currentActiveSubjectId = null;
+let currentActiveSubjectName = '';
+let currentActiveTopicTitle = '';
+let activeQuizQuestions = [];
+
+async function launchQuizModal(subjectId, subjectName) {
+    const select = document.getElementById(`topicSelect-${subjectId}`);
+    if (!select || !select.value) {
+        alert("Please select a valid syllabus topic first.");
+        return;
+    }
+
+    const topicId = parseInt(select.value);
+    const selectedOption = select.options[select.selectedIndex];
+    const topicTitle = selectedOption.getAttribute('data-topic-title') || selectedOption.text;
+
+    currentActiveTopicId = topicId;
+    currentActiveSubjectId = subjectId;
+    currentActiveSubjectName = subjectName;
+    currentActiveTopicTitle = topicTitle;
+
+    document.getElementById('quizModalTitle').textContent = `Practice MCQ: ${topicTitle}`;
+    document.getElementById('quizModalSubtitle').textContent = `${subjectName} • 5 Questions`;
+
+    // Show modal and reset state
+    document.getElementById('quizModal').style.display = 'flex';
+    document.getElementById('quizLoadingState').style.display = 'block';
+    document.getElementById('quizErrorState').style.display = 'none';
+    document.getElementById('quizQuestionsContainer').style.display = 'none';
+    document.getElementById('quizResultsContainer').style.display = 'none';
+
+    try {
+        const response = await fetch('/api/ai/academic-content', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                topic_id: topicId,
+                content_type: 'mcq'
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.questions && data.questions.length > 0) {
+            activeQuizQuestions = data.questions;
+            renderQuizQuestions(data.questions);
+            document.getElementById('quizLoadingState').style.display = 'none';
+            document.getElementById('quizQuestionsContainer').style.display = 'block';
+        } else {
+            throw new Error(data.error || "Unable to extract multiple-choice questions for this topic.");
+        }
+    } catch (err) {
+        document.getElementById('quizLoadingState').style.display = 'none';
+        document.getElementById('quizErrorMessage').textContent = err.message || "Failed to load quiz.";
+        document.getElementById('quizErrorState').style.display = 'block';
+    }
+}
+
+function renderQuizQuestions(questions) {
+    const list = document.getElementById('questionsList');
+    list.innerHTML = '';
+
+    questions.forEach((q, qIdx) => {
+        const block = document.createElement('div');
+        block.className = 'question-block';
+
+        const qTitle = document.createElement('div');
+        qTitle.className = 'question-text';
+        qTitle.textContent = `${qIdx + 1}. ${q.question}`;
+        block.appendChild(qTitle);
+
+        const optionsGroup = document.createElement('div');
+        (q.options || []).forEach((opt, oIdx) => {
+            const optLabel = document.createElement('label');
+            optLabel.className = 'option-label';
+
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = `question_${qIdx}`;
+            radio.value = oIdx;
+            radio.required = true;
+
+            const span = document.createElement('span');
+            span.textContent = opt;
+
+            optLabel.appendChild(radio);
+            optLabel.appendChild(span);
+            optionsGroup.appendChild(optLabel);
+        });
+
+        block.appendChild(optionsGroup);
+        list.appendChild(block);
+    });
+}
+
+async function handleQuizSubmit(e) {
+    e.preventDefault();
+    const submitBtn = document.getElementById('submitQuizBtn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting & Scoring...';
+
+    // Collect answers
+    const userAnswers = [];
+    activeQuizQuestions.forEach((_, qIdx) => {
+        const selected = document.querySelector(`input[name="question_${qIdx}"]:checked`);
+        userAnswers.push(selected ? parseInt(selected.value) : null);
+    });
+
+    try {
+        const res = await fetch('/api/quiz/submit', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                topic_id: currentActiveTopicId,
+                subject_id: currentActiveSubjectId,
+                title: `${currentActiveTopicTitle} MCQ Drill`,
+                questions: activeQuizQuestions,
+                answers: userAnswers
+            })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            renderQuizResults(data);
+        } else {
+            alert(data.error || "Scoring failed.");
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit & Score Quiz →';
+        }
+    } catch (err) {
+        alert("Network error while submitting answers: " + err.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit & Score Quiz →';
+    }
+}
+
+function renderQuizResults(data) {
+    document.getElementById('quizQuestionsContainer').style.display = 'none';
+    document.getElementById('quizResultsContainer').style.display = 'block';
+
+    const scoreDisplay = document.getElementById('quizScoreDisplay');
+    scoreDisplay.textContent = `${data.score} / ${data.total_questions}`;
+
+    const feedback = document.getElementById('quizScoreFeedback');
+    if (data.percentage >= 80) {
+        feedback.textContent = `Excellent mastery! ${data.percentage}% conceptual recall.`;
+        feedback.style.color = 'var(--success)';
+    } else if (data.percentage >= 50) {
+        feedback.textContent = `Good effort! ${data.percentage}% achieved. A quick revision will help solidify weak areas.`;
+        feedback.style.color = 'var(--primary)';
+    } else {
+        feedback.textContent = `Needs reinforcement. ${data.percentage}% scored. Review topic notes and reattempt.`;
+        feedback.style.color = '#dc2626';
+    }
+
+    const reviewList = document.getElementById('quizReviewList');
+    reviewList.innerHTML = '';
+
+    (data.results || []).forEach((resItem, idx) => {
+        const itemBox = document.createElement('div');
+        itemBox.className = 'question-block';
+        itemBox.style.borderLeft = resItem.is_correct ? '4px solid var(--success)' : '4px solid #dc2626';
+
+        const statusIcon = resItem.is_correct ? '✓ Correct' : '✗ Incorrect';
+        const statusColor = resItem.is_correct ? 'var(--success)' : '#dc2626';
+
+        let optionsHtml = '';
+        (resItem.options || []).forEach((opt, oIdx) => {
+            let badge = '';
+            let bg = '#ffffff';
+            if (oIdx === resItem.correct_answer) {
+                badge = ' <span class="pill-badge pill-important" style="font-size:11px; margin-left:6px;">Correct Answer</span>';
+                bg = '#f0fdf4';
+            }
+            if (oIdx === resItem.user_answer && !resItem.is_correct) {
+                badge = ' <span class="pill-badge pill-neutral" style="font-size:11px; margin-left:6px; background:#fee2e2; color:#b91c1c;">Your Choice</span>';
+                bg = '#fef2f2';
+            }
+            optionsHtml += `<div style="padding: 6px 10px; margin-bottom: 4px; font-size: 13px; background: ${bg}; border-radius: 4px;">${escapeHtml(opt)}${badge}</div>`;
+        });
+
+        itemBox.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-weight: 700; font-size: 13.5px; color: var(--text-primary);">${idx + 1}. ${escapeHtml(resItem.question)}</span>
+                <span style="font-weight: 700; font-size: 12px; color: ${statusColor};">${statusIcon}</span>
+            </div>
+            <div style="margin: 8px 0;">${optionsHtml}</div>
+            ${resItem.explanation ? `<div style="font-size: 12px; color: var(--text-secondary); background: #f8fafc; padding: 8px 10px; border-radius: 4px; margin-top: 6px;"><strong>Explanation:</strong> ${escapeHtml(resItem.explanation)}</div>` : ''}
+        `;
+        reviewList.appendChild(itemBox);
+    });
+}
+
+function retakeCurrentQuiz() {
+    if (currentActiveSubjectId && currentActiveSubjectName) {
+        launchQuizModal(currentActiveSubjectId, currentActiveSubjectName);
+    }
+}
+
+function closeQuizModal() {
+    document.getElementById('quizModal').style.display = 'none';
+    // If completed, refresh page to show newly recorded attempt in history table
+    if (document.getElementById('quizResultsContainer').style.display === 'block') {
+        window.location.reload();
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.innerText = text || '';
+    return div.innerHTML;
+}
+</script>
 {% endblock %}

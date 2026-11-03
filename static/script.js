@@ -45,11 +45,37 @@ async function toggleTaskStatus(taskId) {
 }
 
 // 2. Add Task Modal Controls
-function openAddTaskModal() {
+async function openAddTaskModal() {
     const modal = document.getElementById('addTaskModal');
     if (modal) {
         modal.style.display = 'flex';
         document.getElementById('taskTitleInput')?.focus();
+
+        // Dynamically fetch and sync latest subjects into dropdown
+        const selectElem = document.getElementById('taskSubjectSelect');
+        if (selectElem) {
+            try {
+                const response = await fetch('/api/subjects');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.subjects) {
+                        const currentVal = selectElem.value;
+                        selectElem.innerHTML = '<option value="">General / None</option>';
+                        data.subjects.forEach(subj => {
+                            const opt = document.createElement('option');
+                            opt.value = subj.id;
+                            opt.textContent = `${subj.name} (${subj.code})`;
+                            if (String(subj.id) === String(currentVal)) {
+                                opt.selected = true;
+                            }
+                            selectElem.appendChild(opt);
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('Could not refresh task subjects dynamically:', err);
+            }
+        }
     }
 }
 
@@ -159,12 +185,25 @@ async function handleAiChatSubmit(e) {
 
         const aiBubble = document.createElement('div');
         aiBubble.className = 'ai-message-bubble';
+
+        let badgeHtml = '';
+        if (data.provider === 'gemini') {
+            badgeHtml += `<span class="pill-badge pill-info" style="font-size: 10px; margin-bottom: 5px; display: inline-block;">⚡ Gemini Primary</span>`;
+        } else if (data.provider === 'ollama') {
+            badgeHtml += `<span class="pill-badge pill-warning" style="font-size: 10px; margin-bottom: 5px; display: inline-block;">🦙 Ollama Fallback</span>`;
+        }
+
+        if (data.source_pages) {
+            badgeHtml += `<span class="pill-badge pill-success" style="font-size: 10px; margin-bottom: 5px; margin-left: 5px; display: inline-block;">📄 Source: ${escapeHtml(data.source_pages)}</span>`;
+        }
+
         aiBubble.innerHTML = `
             <div class="ai-message-avatar">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
             </div>
             <div class="ai-message-content">
-                <p>${escapeHtml(data.reply).replace(/\\n/g, '<br>')}</p>
+                ${badgeHtml ? `<div>${badgeHtml}</div>` : ''}
+                <p>${escapeHtml(data.reply).replace(/\n/g, '<br>')}</p>
             </div>
         `;
         chatBody.appendChild(aiBubble);

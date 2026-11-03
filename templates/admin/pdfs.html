@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block title %}PDF & Study Material Management — EduMate Admin{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+        <div>
+            <h1 class="welcome-title">Syllabus PDF & Document Management</h1>
+            <p class="welcome-subtitle">Monitor student document uploads, text extraction outcomes, OCR requirements, and processing errors</p>
+        </div>
+    </div>
+
+    <!-- Metrics Cards Grid -->
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 24px;">
+        <div class="stat-card">
+            <span class="stat-label">Total Uploaded Files</span>
+            <div class="stat-value">{{ total_uploaded }}</div>
+            <span class="stat-footnote">All recorded documents</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Processed Successfully</span>
+            <div class="stat-value" style="color: var(--success);">{{ successful_processed }}</div>
+            <span class="stat-footnote">Topics extracted and ready</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Scanned (OCR Needed)</span>
+            <div class="stat-value" style="color: var(--warning);">{{ ocr_required_count }}</div>
+            <span class="stat-footnote">Image-only without text layer</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Corrupted / Encrypted</span>
+            <div class="stat-value" style="color: var(--danger-text);">{{ failed_count }}</div>
+            <span class="stat-footnote">Protected or invalid stream</span>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card" style="margin-bottom: 20px; padding: 14px 20px;">
+        <form method="GET" action="{{ url_for('admin.pdf_management_view') }}" style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+            <span style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">Filter by Status:</span>
+            <a href="{{ url_for('admin.pdf_management_view') }}" class="pill-badge {% if not status_filter %}pill-important{% else %}pill-neutral{% endif %}" style="text-decoration: none; padding: 6px 12px;">All ({{ total_uploaded }})</a>
+            <a href="{{ url_for('admin.pdf_management_view', status='processed') }}" class="pill-badge {% if status_filter == 'processed' %}pill-important{% else %}pill-neutral{% endif %}" style="text-decoration: none; padding: 6px 12px;">Processed ({{ successful_processed }})</a>
+            <a href="{{ url_for('admin.pdf_management_view', status='ocr_required') }}" class="pill-badge {% if status_filter == 'ocr_required' %}pill-important{% else %}pill-neutral{% endif %}" style="text-decoration: none; padding: 6px 12px;">OCR Needed ({{ ocr_required_count }})</a>
+            <a href="{{ url_for('admin.pdf_management_view', status='failed') }}" class="pill-badge {% if status_filter == 'failed' %}pill-important{% else %}pill-neutral{% endif %}" style="text-decoration: none; padding: 6px 12px;">Failed</a>
+            <a href="{{ url_for('admin.pdf_management_view', status='encrypted') }}" class="pill-badge {% if status_filter == 'encrypted' %}pill-important{% else %}pill-neutral{% endif %}" style="text-decoration: none; padding: 6px 12px;">Password Protected</a>
+        </form>
+    </div>
+
+    <!-- Uploaded PDFs Table -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Document Extraction Records ({{ pagination.total }})</h2>
+            <span class="text-muted-sm">Page {{ pagination.page }} of {{ pagination.pages or 1 }}</span>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Document Filename</th>
+                        <th>Student Uploader</th>
+                        <th>Target Subject</th>
+                        <th>File Size</th>
+                        <th>Status</th>
+                        <th>Topics Extracted</th>
+                        <th>Upload Timestamp</th>
+                        <th style="text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if pagination.items %}
+                        {% for doc in pagination.items %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('admin.pdf_detail_view', pdf_id=doc.id) }}" style="font-weight: 600; color: var(--primary);">
+                                    {{ doc.filename }}
+                                </a>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('admin.user_detail', user_id=doc.user.id) }}" style="color: var(--text-primary);">
+                                    {{ doc.user.username }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if doc.subject %}
+                                <code>{{ doc.subject.code }}</code> ({{ doc.subject.name }})
+                                {% else %}
+                                <span class="text-muted-sm">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted-sm">{{ (doc.file_size_bytes / 1024)|round(1) }} KB</td>
+                            <td>
+                                {% if doc.status in ('processed', 'Approved') %}
+                                <span class="status-badge status-completed">{{ doc.status }}</span>
+                                {% elif doc.status == 'ocr_required' %}
+                                <span class="status-badge status-pending" title="Scanned document without text layer">OCR Needed</span>
+                                {% elif doc.status == 'encrypted' %}
+                                <span class="status-badge status-pending" title="Password protected PDF">Encrypted</span>
+                                {% else %}
+                                <span class="status-badge status-pending">Failed</span>
+                                {% endif %}
+                                {% if doc.ocr_applied %}
+                                <span class="pill-badge pill-important" style="font-size: 10px; margin-left: 4px;">OCR</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ doc.topics_count }}</strong>
+                                {% if doc.page_count %}
+                                <span class="text-muted-sm" style="display: block; font-size: 11px;">{{ doc.page_count }} pages</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted-sm">{{ doc.created_at.strftime('%d %b %Y %H:%M') }}</td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <a href="{{ url_for('admin.pdf_detail_view', pdf_id=doc.id) }}" class="btn btn-outline btn-sm">
+                                    Inspect &rarr;
+                                </a>
+                                <form method="POST" action="{{ url_for('admin.delete_pdf_record', pdf_id=doc.id) }}" style="display: inline-block; margin-left: 4px;" onsubmit="return confirm('Delete this PDF log record?');">
+                                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="8" class="text-muted" style="text-align: center; padding: 36px;">No PDF records found for this filter.</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if pagination.pages > 1 %}
+        <div style="display: flex; justify-content: center; gap: 8px; margin-top: 20px; align-items: center;">
+            {% if pagination.has_prev %}
+            <a href="{{ url_for('admin.pdf_management_view', page=pagination.prev_num, status=status_filter) }}" class="btn btn-outline btn-sm">&larr; Previous</a>
+            {% endif %}
+            <span class="text-muted-sm" style="padding: 0 10px;">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+            {% if pagination.has_next %}
+            <a href="{{ url_for('admin.pdf_management_view', page=pagination.next_num, status=status_filter) }}" class="btn btn-outline btn-sm">Next &rarr;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

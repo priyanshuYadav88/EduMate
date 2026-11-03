@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+
+{% block title %}PDF Detail — {{ doc.filename }} — EduMate Admin{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <a href="{{ url_for('admin.pdf_management_view') }}" class="btn btn-outline btn-sm">&larr; Back to PDF Registry</a>
+            <div>
+                <h1 class="welcome-title" style="margin: 0;">{{ doc.filename }}</h1>
+                <span class="text-muted-sm">Uploaded by <strong>{{ doc.user.username }}</strong> &bull; Size: {{ (doc.file_size_bytes / 1024)|round(1) }} KB &bull; Date: {{ doc.created_at.strftime('%d %B %Y %H:%M:%S') }}</span>
+            </div>
+        </div>
+        <div>
+            {% if doc.status == 'processed' %}
+            <span class="status-badge status-completed" style="font-size: 13px; padding: 6px 14px;">Extraction Successful ({{ doc.topics_count }} topics)</span>
+            {% elif doc.status == 'ocr_required' %}
+            <span class="status-badge status-pending" style="font-size: 13px; padding: 6px 14px;">OCR Engine Required (Scanned PDF)</span>
+            {% elif doc.status == 'encrypted' %}
+            <span class="status-badge status-pending" style="font-size: 13px; padding: 6px 14px;">Password Encrypted</span>
+            {% else %}
+            <span class="status-badge status-pending" style="font-size: 13px; padding: 6px 14px;">Failed</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Error Callout if applicable -->
+    {% if doc.error_message %}
+    <div class="alert alert-danger" style="margin-bottom: 20px;">
+        <strong>Processing Issue:</strong> {{ doc.error_message }}
+    </div>
+    {% endif %}
+
+    <!-- 2-Column Split: Document Metadata & Target Subject -->
+    <div class="two-column-row" style="margin-bottom: 24px;">
+        <!-- Left: Upload Metadata -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Document Information</h2>
+            </div>
+            <div class="system-health-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="health-item">
+                    <span class="health-label">Original Filename</span>
+                    <span class="health-val" style="word-break: break-all;">{{ doc.filename }}</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">File Size</span>
+                    <span class="health-val">{{ (doc.file_size_bytes / 1024)|round(1) }} KB ({{ doc.file_size_bytes }} bytes)</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">Student Account</span>
+                    <span class="health-val">{{ doc.user.username }} ({{ doc.user.email }})</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">Target Subject</span>
+                    <span class="health-val">
+                        {% if doc.subject %}
+                        {{ doc.subject.name }} ({{ doc.subject.code }})
+                        {% else %}
+                        Unassigned
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">Document Pages</span>
+                    <span class="health-val">{{ doc.page_count or 'N/A' }}</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">OCR Status</span>
+                    <span class="health-val">
+                        {% if doc.ocr_applied %}
+                        <span class="pill-badge pill-important">OCR Applied</span>
+                        {% else %}
+                        <span class="pill-badge pill-info">Native Text Layer</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Actions & Delete -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Management Actions</h2>
+            </div>
+            <p class="text-muted-sm" style="margin-bottom: 16px;">
+                Review the extracted textual layer and syllabus breakdown below. This record provides academic integrity verification during viva.
+            </p>
+            <form method="POST" action="{{ url_for('admin.delete_pdf_record', pdf_id=doc.id) }}" onsubmit="return confirm('Permanently remove this PDF upload log?');">
+                <button type="submit" class="btn btn-danger btn-sm">Delete PDF Log Record</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- AI Structured Syllabus Breakdown (JSON) -->
+    {% if doc.structured_json %}
+    <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header">
+            <h2 class="card-title">AI Syllabus Understanding Structure (JSON)</h2>
+            <span class="pill-badge pill-info">Hierarchical Curriculum Output</span>
+        </div>
+        <div style="background-color: #0f172a; color: #38bdf8; padding: 18px; border-radius: var(--radius-md); font-family: monospace; font-size: 12.5px; max-height: 350px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;">
+{{ doc.structured_json }}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Extracted Text Layer Viewer -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Extracted Plaintext Content</h2>
+            <span class="text-muted-sm">{{ (doc.extracted_text or '')|length }} characters extracted</span>
+        </div>
+        <div style="background-color: #0f172a; color: #f1f5f9; padding: 18px; border-radius: var(--radius-md); font-family: monospace; font-size: 12.5px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5;">
+{{ doc.extracted_text or 'No selectable text layer found in this document (scanned or empty).' }}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}Topics for {{ subject.name }} — EduMate Admin{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <a href="{{ url_for('admin.academics_list') }}" class="btn btn-outline btn-sm">&larr; Back to Subjects</a>
+            <div>
+                <h1 class="welcome-title" style="margin: 0;">{{ subject.name }} ({{ subject.code }})</h1>
+                <span class="text-muted-sm">Student: <strong>{{ subject.student.username }}</strong> &bull; Total Topics: {{ subject.total_topics }} &bull; Completed: {{ subject.completed_topics }} ({{ subject.progress_percentage }}%)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2-Column Split: Topic List & Add Topic Form -->
+    <div class="two-column-row">
+        <!-- Topic List -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Syllabus Topics Checklist</h2>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Topic Title</th>
+                            <th>Status</th>
+                            <th style="text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if subject.topics %}
+                            {% for t in subject.topics %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td><strong>{{ t.title }}</strong></td>
+                                <td>
+                                    {% if t.is_completed %}
+                                    <span class="status-badge status-completed">Completed</span>
+                                    {% else %}
+                                    <span class="status-badge status-pending">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td style="text-align: right;">
+                                    <form method="POST" action="{{ url_for('admin.delete_subject_topic', topic_id=t.id) }}" onsubmit="return confirm('Delete topic {{ t.title }}?');">
+                                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr><td colspan="4" class="text-muted" style="text-align: center; padding: 24px;">No syllabus topics recorded for this subject yet.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Add Topic Form -->
+        <div class="card" style="height: fit-content;">
+            <div class="card-header">
+                <h2 class="card-title">Add New Topic</h2>
+            </div>
+            <form method="POST" action="{{ url_for('admin.add_subject_topic', subject_id=subject.id) }}">
+                <div class="form-group">
+                    <label for="topicTitle">Topic Title <span class="text-danger">*</span></label>
+                    <input type="text" id="topicTitle" name="title" class="form-control" placeholder="e.g. Memory Virtualization & Paging" required>
+                </div>
+                <div class="form-options" style="margin-bottom: 16px;">
+                    <label class="remember-label">
+                        <input type="checkbox" name="is_completed" value="true">
+                        <span>Mark as already completed by student</span>
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-primary">Add Topic to Subject</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

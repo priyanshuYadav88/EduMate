@@ -16,6 +16,63 @@
     <div class="app-layout">
         <!-- Sidebar Navigation (Deep Navy #111827) -->
         <aside class="sidebar">
+            {% if request.blueprint == 'admin' %}
+            <!-- Dedicated Admin Sidebar Header -->
+            <div class="brand">
+                <div class="brand-icon" style="background: linear-gradient(135deg, #d97706, #f59e0b);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">EduMate Admin</span>
+                    <span class="brand-tagline" style="color: #f59e0b; font-weight: 600;">Control Center</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin.dashboard') }}" class="nav-item admin-nav-link {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    <span>Overview</span>
+                </a>
+                <a href="{{ url_for('admin.users_list') }}" class="nav-item admin-nav-link {% if request.endpoint in ['admin.users_list', 'admin.user_detail'] %}active{% endif %}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span>User Management</span>
+                </a>
+                <a href="{{ url_for('admin.academics_list') }}" class="nav-item admin-nav-link {% if request.endpoint in ['admin.academics_list', 'admin.subject_topics_view'] %}active{% endif %}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                    <span>Subjects &amp; Syllabus</span>
+                </a>
+                <a href="{{ url_for('admin.pdf_management_view') }}" class="nav-item admin-nav-link {% if request.endpoint in ['admin.pdf_management_view', 'admin.pdf_detail_view'] %}active{% endif %}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    <span>Uploaded Documents</span>
+                </a>
+                <a href="{{ url_for('admin.system_control_view') }}" class="nav-item admin-nav-link {% if request.endpoint == 'admin.system_control_view' %}active{% endif %}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span>System &amp; AI Status</span>
+                </a>
+                <a href="{{ url_for('admin.audit_logs_view') }}" class="nav-item admin-nav-link {% if request.endpoint == 'admin.audit_logs_view' %}active{% endif %}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span>Audit Trail Logs</span>
+                </a>
+
+                <div class="sidebar-divider"></div>
+                <a href="{{ url_for('dashboard', preview_student='1') }}" class="nav-item" style="color: #94a3b8; font-size: 13px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <span>View as Student</span>
+                </a>
+            </nav>
+
+            <div class="quote-card" style="border-color: #f59e0b33; background: #1e293b;">
+                <div class="quote-header">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span style="color: #f59e0b;">Admin Session</span>
+                </div>
+                <p class="quote-text" style="color: #cbd5e1; font-size: 11.5px;">Server-side role protection active. Full system oversight enabled.</p>
+            </div>
+
+            {% else %}
+            <!-- Student Sidebar Header -->
             <div class="brand">
                 <div class="brand-icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -73,9 +130,9 @@
 
                 {% if current_user.is_authenticated and current_user.is_admin %}
                 <div class="sidebar-divider"></div>
-                <a href="{{ url_for('admin.dashboard') }}" class="nav-item admin-nav-link {% if request.endpoint and request.endpoint.startswith('admin.') %}active{% endif %}">
+                <a href="{{ url_for('admin.dashboard') }}" class="nav-item admin-nav-link" style="color: #f59e0b; border: 1px dashed #f59e0b66; border-radius: 6px;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                    <span>Admin Panel</span>
+                    <span>Admin Console</span>
                 </a>
                 {% endif %}
             </nav>
@@ -88,6 +145,7 @@
                 </div>
                 <p class="quote-text">"Small steps lead to big results."</p>
             </div>
+            {% endif %}
         </aside>
 
         <!-- Main Wrapper -->

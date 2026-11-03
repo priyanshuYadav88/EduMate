@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}Administrative Audit Logs — EduMate Admin{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+        <div>
+            <h1 class="welcome-title">Administrative Audit Trail</h1>
+            <p class="welcome-subtitle">Immutable chronological log of all sensitive administrative modifications, security operations, and user changes</p>
+        </div>
+        <div class="admin-badge-pill">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>Compliance &amp; Viva Ready</span>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card" style="margin-bottom: 20px; padding: 14px 20px;">
+        <form method="GET" action="{{ url_for('admin.audit_logs_view') }}" style="display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+                <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Filter by Action Type</label>
+                <select name="action" class="form-control">
+                    <option value="">All Actions ({{ pagination.total }})</option>
+                    {% for act in available_actions %}
+                    <option value="{{ act }}" {% if action_filter == act %}selected{% endif %}>{{ act }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="padding: 10px 18px;">Filter</button>
+            {% if action_filter %}
+            <a href="{{ url_for('admin.audit_logs_view') }}" class="btn btn-outline" style="padding: 10px 14px;">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Audit Logs Table -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Recorded Actions ({{ pagination.total }} Total)</h2>
+            <span class="text-muted-sm">Page {{ pagination.page }} of {{ pagination.pages or 1 }}</span>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Timestamp (UTC)</th>
+                        <th>Admin Username</th>
+                        <th>Action Performed</th>
+                        <th>Target Resource</th>
+                        <th>Operation Details</th>
+                        <th>IP Address</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if pagination.items %}
+                        {% for log in pagination.items %}
+                        <tr>
+                            <td>#{{ log.id }}</td>
+                            <td class="text-muted-sm">{{ log.created_at.strftime('%d %b %Y %H:%M:%S') }}</td>
+                            <td>
+                                <strong>{{ log.admin_username }}</strong>
+                            </td>
+                            <td>
+                                <span class="pill-badge {% if 'DELETE' in log.action %}pill-important{% elif 'CREATE' in log.action or 'ADD' in log.action %}pill-info{% else %}pill-neutral{% endif %}">
+                                    {{ log.action }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if log.target_type %}
+                                <code>{{ log.target_type }}</code> {% if log.target_id %}#{{ log.target_id }}{% endif %}
+                                {% else %}
+                                —
+                                {% endif %}
+                            </td>
+                            <td style="font-size: 13px;">{{ log.details or '—' }}</td>
+                            <td class="text-muted-sm">{{ log.ip_address or '127.0.0.1' }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-muted" style="text-align: center; padding: 36px;">
+                                No audit log records found matching your filter.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        {% if pagination.pages > 1 %}
+        <div style="display: flex; justify-content: center; gap: 8px; margin-top: 20px; align-items: center;">
+            {% if pagination.has_prev %}
+            <a href="{{ url_for('admin.audit_logs_view', page=pagination.prev_num, action=action_filter) }}" class="btn btn-outline btn-sm">&larr; Previous</a>
+            {% endif %}
+            <span class="text-muted-sm" style="padding: 0 10px;">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+            {% if pagination.has_next %}
+            <a href="{{ url_for('admin.audit_logs_view', page=pagination.next_num, action=action_filter) }}" class="btn btn-outline btn-sm">Next &rarr;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
