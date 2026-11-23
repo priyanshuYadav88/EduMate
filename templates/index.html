@@ -7,8 +7,14 @@
     <!-- Welcome Header Banner -->
     <section class="welcome-header">
         <div class="welcome-left">
-            <h1 class="welcome-title">Welcome Back! <span class="wave-emoji">👏</span></h1>
-            <p class="welcome-subtitle">Let's make today productive.</p>
+            <h1 class="welcome-title">{{ greeting or 'Welcome Back!' }} <span class="wave-emoji">👏</span></h1>
+            <p class="welcome-subtitle">
+                {% if current_user.profile and current_user.profile.target_exam %}
+                Target: {{ current_user.profile.target_exam }} &bull; {{ current_user.profile.daily_study_hours or 3.0 }}h daily study goal
+                {% else %}
+                Let's make today productive.
+                {% endif %}
+            </p>
         </div>
         <div class="welcome-right">
             <div class="date-badge">{{ current_date_formatted }}</div>

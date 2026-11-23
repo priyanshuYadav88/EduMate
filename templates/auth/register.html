@@ -1,74 +1,593 @@
 {% extends 'auth/auth_base.html' %}
 
-{% block title %}Register — EduMate{% endblock %}
+{% block title %}Create Student Account — EduMate{% endblock %}
 
 {% block content %}
-<div class="auth-page-container">
-    <div class="auth-card">
-        <div class="auth-header">
-            <div class="brand-icon auth-logo-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
-                    <path d="M6 12v5c3 3 9 3 12 0v-5"/>
-                </svg>
+<div class="edumate-register-wrapper">
+    <div class="edumate-register-frame">
+        <!-- Main Split Row: Left Branding/Benefits + Right Multi-Step Form -->
+        <div class="register-split-grid">
+            <!-- Left Column: Branding, Stacked Books & Feature Checklist -->
+            <div class="register-brand-panel">
+                <div class="brand-header-wrap">
+                    <div class="brand-square-badge">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                            <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                        </svg>
+                    </div>
+                    <div class="brand-text-block">
+                        <span class="brand-text-title">EduMate</span>
+                        <span class="brand-text-subtitle">Smart Study Planner</span>
+                    </div>
+                </div>
+
+                <!-- Custom 3D Stack of Textbooks with Graduation Cap -->
+                <div class="register-hero-illustration" aria-hidden="true">
+                    <svg viewBox="0 0 280 220" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="capGrad" x1="50" y1="20" x2="220" y2="100" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#4f46e5"/>
+                                <stop offset="100%" stop-color="#2563eb"/>
+                            </linearGradient>
+                            <linearGradient id="bookTopGrad" x1="60" y1="90" x2="220" y2="130" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#6366f1"/>
+                                <stop offset="100%" stop-color="#3b82f6"/>
+                            </linearGradient>
+                            <linearGradient id="bookMidGrad" x1="50" y1="120" x2="230" y2="165" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#3b82f6"/>
+                                <stop offset="100%" stop-color="#2563eb"/>
+                            </linearGradient>
+                            <linearGradient id="bookBotGrad" x1="40" y1="150" x2="240" y2="200" gradientUnits="userSpaceOnUse">
+                                <stop offset="0%" stop-color="#1d4ed8"/>
+                                <stop offset="100%" stop-color="#1e1b4b"/>
+                            </linearGradient>
+                            <filter id="bookShadow" x="-15%" y="-15%" width="130%" height="130%">
+                                <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#4338ca" flood-opacity="0.16"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Soft glow backdrop -->
+                        <ellipse cx="140" cy="185" rx="100" ry="16" fill="#cbd5e1" fill-opacity="0.5"/>
+                        <circle cx="140" cy="90" r="75" fill="#eff6ff" fill-opacity="0.6"/>
+
+                        <!-- Stacked Books Isometric Group -->
+                        <g filter="url(#bookShadow)">
+                            <!-- Bottom Book (Navy) -->
+                            <path d="M45 160 L140 195 L235 160 L140 130 Z" fill="url(#bookBotGrad)"/>
+                            <path d="M45 160 L45 178 L140 213 L140 195 Z" fill="#1e1b4b"/>
+                            <path d="M140 195 L140 213 L235 178 L235 160 Z" fill="#312e81"/>
+                            <!-- Pages edge -->
+                            <path d="M52 165 L138 196 L138 206 L52 175 Z" fill="#f8fafc"/>
+                            <path d="M142 196 L228 165 L228 175 L142 206 Z" fill="#f1f5f9"/>
+
+                            <!-- Middle Book (Royal Blue) -->
+                            <path d="M55 130 L140 160 L225 130 L140 102 Z" fill="url(#bookMidGrad)"/>
+                            <path d="M55 130 L55 146 L140 176 L140 160 Z" fill="#1e40af"/>
+                            <path d="M140 160 L140 176 L225 146 L225 130 Z" fill="#2563eb"/>
+                            <!-- Pages edge -->
+                            <path d="M62 135 L138 162 L138 170 L62 143 Z" fill="#ffffff"/>
+                            <path d="M142 162 L218 135 L218 143 L142 170 Z" fill="#f8fafc"/>
+
+                            <!-- Top Book (Indigo) -->
+                            <path d="M68 100 L140 125 L212 100 L140 76 Z" fill="url(#bookTopGrad)"/>
+                            <path d="M68 100 L68 114 L140 139 L140 125 Z" fill="#4338ca"/>
+                            <path d="M140 125 L140 139 L212 114 L212 100 Z" fill="#4f46e5"/>
+                            <!-- Pages edge -->
+                            <path d="M74 104 L138 126 L138 133 L74 111 Z" fill="#ffffff"/>
+                            <path d="M142 126 L206 104 L206 111 L142 133 Z" fill="#f8fafc"/>
+
+                            <!-- Graduation Cap on Top of Books -->
+                            <!-- Cap Skull Base -->
+                            <ellipse cx="140" cy="72" rx="34" ry="12" fill="#1e1b4b"/>
+                            <!-- Cap Diamond Mortarboard Top -->
+                            <polygon points="140,30 220,55 140,78 60,55" fill="url(#capGrad)"/>
+                            <polygon points="140,78 220,55 220,58 140,81" fill="#312e81"/>
+                            <polygon points="140,78 60,55 60,58 140,81" fill="#1e1b4b"/>
+                            <!-- Cap Button & Gold Tassel -->
+                            <circle cx="140" cy="55" r="4" fill="#fbbf24"/>
+                            <path d="M140 55 Q168 62 178 78 Q182 92 186 102" stroke="#f59e0b" stroke-width="2" fill="none"/>
+                            <rect x="183" y="102" width="6" height="12" rx="1.5" fill="#f59e0b"/>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Feature Benefits Checklist with Circular Checkmarks -->
+                <div class="register-benefits-list">
+                    <div class="benefit-item">
+                        <div class="benefit-check-circle">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        </div>
+                        <span class="benefit-text">Create your profile</span>
+                    </div>
+
+                    <div class="benefit-item">
+                        <div class="benefit-check-circle">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        </div>
+                        <span class="benefit-text">Get personalized study plans</span>
+                    </div>
+
+                    <div class="benefit-item">
+                        <div class="benefit-check-circle">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        </div>
+                        <span class="benefit-text">Track your progress</span>
+                    </div>
+
+                    <div class="benefit-item">
+                        <div class="benefit-check-circle">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        </div>
+                        <span class="benefit-text">Prepare for exams</span>
+                    </div>
+                </div>
             </div>
-            <h2>Create Student Account</h2>
-            <p>Start organizing your college studies and exams</p>
-        </div>
 
-        <form method="POST" action="{{ url_for('auth.register') }}" class="auth-form">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text"
-                       name="username"
-                       id="username"
-                       class="form-control"
-                       value="{{ username or '' }}"
-                       placeholder="e.g. priyanshu"
-                       required
-                       minlength="3"
-                       autofocus>
+            <!-- Right Column: Multi-Step Registration Form Card -->
+            <div class="register-form-panel">
+                <div class="register-form-header">
+                    <h1 class="register-main-title">Create Your Account</h1>
+                    <span style="display: none;">Create Student Account</span>
+                    <p class="register-main-subtitle">Join EduMate and start your smart study journey.</p>
+                </div>
+
+                <!-- 3-Step Progress Stepper -->
+                <div class="wizard-stepper-bar">
+                    <!-- Step 1 Indicator -->
+                    <div class="stepper-step active" id="stepIndicator1">
+                        <div class="stepper-bubble">1</div>
+                        <span class="stepper-label">Personal Info</span>
+                    </div>
+                    <div class="stepper-line" id="stepLine1"></div>
+
+                    <!-- Step 2 Indicator -->
+                    <div class="stepper-step" id="stepIndicator2">
+                        <div class="stepper-bubble">2</div>
+                        <span class="stepper-label">Academic Info</span>
+                    </div>
+                    <div class="stepper-line" id="stepLine2"></div>
+
+                    <!-- Step 3 Indicator -->
+                    <div class="stepper-step" id="stepIndicator3">
+                        <div class="stepper-bubble">3</div>
+                        <span class="stepper-label">Preferences</span>
+                    </div>
+                </div>
+
+                <!-- Form Card Frame -->
+                <div class="register-card-inner auth-card">
+                    <form method="POST" action="{{ url_for('auth.register') }}" id="registerForm" onsubmit="handleRegisterSubmit(event)">
+                        
+                        <!-- ===================================================
+                             STEP 1: Personal Information
+                             =================================================== -->
+                        <div class="wizard-pane active" id="paneStep1">
+                            <div class="pane-section-header">
+                                <div class="pane-icon-badge">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                </div>
+                                <div class="pane-title-group">
+                                    <h3 class="pane-title">Personal Information</h3>
+                                    <span class="pane-subtitle">Basic account and contact details</span>
+                                </div>
+                            </div>
+
+                            <div class="form-row-2col">
+                                <div class="form-group">
+                                    <label for="full_name" class="form-label">Full Name <span class="required-star">*</span></label>
+                                    <div class="input-with-icon">
+                                        <span class="input-icon">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                        </span>
+                                        <input type="text"
+                                               name="full_name"
+                                               id="full_name"
+                                               class="form-control auth-input"
+                                               value="{{ full_name or '' }}"
+                                               placeholder="e.g. Priyanshu Yadav"
+                                               required
+                                               autofocus>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="username" class="form-label">Username <span class="required-star">*</span></label>
+                                    <div class="input-with-icon">
+                                        <span class="input-icon">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                        </span>
+                                        <input type="text"
+                                               name="username"
+                                               id="username"
+                                               class="form-control auth-input"
+                                               value="{{ username or '' }}"
+                                               placeholder="e.g. priyanshu145"
+                                               required
+                                               minlength="3">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-row-2col">
+                                <div class="form-group">
+                                    <label for="email" class="form-label">Email Address <span class="required-star">*</span></label>
+                                    <div class="input-with-icon">
+                                        <span class="input-icon">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                                        </span>
+                                        <input type="email"
+                                               name="email"
+                                               id="email"
+                                               class="form-control auth-input"
+                                               value="{{ email or '' }}"
+                                               placeholder="e.g. priyanshu@example.com"
+                                               required>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="phone_number" class="form-label">Phone Number <span class="optional-badge">Optional</span></label>
+                                    <div class="input-with-icon">
+                                        <span class="input-icon">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                        </span>
+                                        <input type="tel"
+                                               name="phone_number"
+                                               id="phone_number"
+                                               class="form-control auth-input"
+                                               value="{{ phone_number or '' }}"
+                                               placeholder="e.g. +91 98765 43210">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-row-2col">
+                                <div class="form-group">
+                                    <label for="password" class="form-label">Password <span class="required-star">*</span></label>
+                                    <div class="input-with-icon password-input-wrap">
+                                        <span class="input-icon">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                        </span>
+                                        <input type="password"
+                                               name="password"
+                                               id="password"
+                                               class="form-control auth-input"
+                                               placeholder="Create a password"
+                                               required
+                                               minlength="6">
+                                        <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('password', this)" title="Show/Hide password" aria-label="Toggle password visibility">
+                                            <svg class="eye-show" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            <svg class="eye-hide" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="display: none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="confirm_password" class="form-label">Confirm Password <span class="required-star">*</span></label>
+                                    <div class="input-with-icon password-input-wrap">
+                                        <span class="input-icon">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                        </span>
+                                        <input type="password"
+                                               name="confirm_password"
+                                               id="confirm_password"
+                                               class="form-control auth-input"
+                                               placeholder="Re-enter password"
+                                               required
+                                               minlength="6">
+                                        <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('confirm_password', this)" title="Show/Hide password" aria-label="Toggle password visibility">
+                                            <svg class="eye-show" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            <svg class="eye-hide" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="display: none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="wizard-actions-row">
+                                <a href="{{ url_for('auth.login') }}" class="btn btn-outline btn-cancel-step">Cancel</a>
+                                <button type="button" class="btn btn-auth-submit btn-mockup-primary" onclick="proceedToStep(2)">
+                                    <span>Next: Academic Info</span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- ===================================================
+                             STEP 2: Academic Information
+                             =================================================== -->
+                        <div class="wizard-pane" id="paneStep2" style="display: none;">
+                            <div class="pane-section-header">
+                                <div class="pane-icon-badge">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                                </div>
+                                <div class="pane-title-group">
+                                    <h3 class="pane-title">Academic Information</h3>
+                                    <span class="pane-subtitle">Helps personalize syllabus extraction & exam roadmaps</span>
+                                </div>
+                            </div>
+
+                            <div class="form-row-2col">
+                                <div class="form-group">
+                                    <label for="college_name" class="form-label">College / Institute Name <span class="optional-badge">Optional</span></label>
+                                    <input type="text"
+                                           name="college_name"
+                                           id="college_name"
+                                           class="form-control auth-input"
+                                           value="{{ college_name or '' }}"
+                                           placeholder="e.g. ABES Engineering College">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="university_name" class="form-label">University Name <span class="optional-badge">Optional</span></label>
+                                    <input type="text"
+                                           name="university_name"
+                                           id="university_name"
+                                           class="form-control auth-input"
+                                           value="{{ university_name or '' }}"
+                                           placeholder="e.g. AKTU / Delhi University">
+                                </div>
+                            </div>
+
+                            <div class="form-row-2col">
+                                <div class="form-group">
+                                    <label for="degree_course" class="form-label">Degree / Course <span class="optional-badge">Optional</span></label>
+                                    <input type="text"
+                                           name="degree_course"
+                                           id="degree_course"
+                                           class="form-control auth-input"
+                                           value="{{ degree_course or '' }}"
+                                           placeholder="e.g. B.Tech / BCA / MCA">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="branch_department" class="form-label">Branch / Department <span class="optional-badge">Optional</span></label>
+                                    <input type="text"
+                                           name="branch_department"
+                                           id="branch_department"
+                                           class="form-control auth-input"
+                                           value="{{ branch_department or '' }}"
+                                           placeholder="e.g. Computer Science & Eng.">
+                                </div>
+                            </div>
+
+                            <div class="form-row-3col">
+                                <div class="form-group">
+                                    <label for="current_semester" class="form-label">Current Semester <span class="optional-badge">Optional</span></label>
+                                    <select name="current_semester" id="current_semester" class="form-control auth-input auth-select">
+                                        <option value="">Select Semester</option>
+                                        <option value="Semester 1" {% if current_semester == 'Semester 1' %}selected{% endif %}>Semester 1 (Year 1)</option>
+                                        <option value="Semester 2" {% if current_semester == 'Semester 2' %}selected{% endif %}>Semester 2 (Year 1)</option>
+                                        <option value="Semester 3" {% if current_semester == 'Semester 3' %}selected{% endif %}>Semester 3 (Year 2)</option>
+                                        <option value="Semester 4" {% if current_semester == 'Semester 4' %}selected{% endif %}>Semester 4 (Year 2)</option>
+                                        <option value="Semester 5" {% if current_semester == 'Semester 5' %}selected{% endif %}>Semester 5 (Year 3)</option>
+                                        <option value="Semester 6" {% if current_semester == 'Semester 6' %}selected{% endif %}>Semester 6 (Year 3)</option>
+                                        <option value="Semester 7" {% if current_semester == 'Semester 7' %}selected{% endif %}>Semester 7 (Year 4)</option>
+                                        <option value="Semester 8" {% if current_semester == 'Semester 8' %}selected{% endif %}>Semester 8 (Year 4)</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="academic_session" class="form-label">Academic Session <span class="optional-badge">Optional</span></label>
+                                    <input type="text"
+                                           name="academic_session"
+                                           id="academic_session"
+                                           class="form-control auth-input"
+                                           value="{{ academic_session or '' }}"
+                                           placeholder="e.g. 2026-2027">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="roll_number" class="form-label">Roll Number <span class="optional-badge">Optional</span></label>
+                                    <input type="text"
+                                           name="roll_number"
+                                           id="roll_number"
+                                           class="form-control auth-input"
+                                           value="{{ roll_number or '' }}"
+                                           placeholder="e.g. 2200320100123">
+                                </div>
+                            </div>
+
+                            <div class="wizard-actions-row">
+                                <button type="button" class="btn btn-outline btn-cancel-step" onclick="proceedToStep(1)">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right: 4px;"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                                    <span>Back</span>
+                                </button>
+                                <button type="button" class="btn btn-auth-submit btn-mockup-primary" onclick="proceedToStep(3)">
+                                    <span>Next: Preferences</span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- ===================================================
+                             STEP 3: Study Preferences
+                             =================================================== -->
+                        <div class="wizard-pane" id="paneStep3" style="display: none;">
+                            <div class="pane-section-header">
+                                <div class="pane-icon-badge">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                                </div>
+                                <div class="pane-title-group">
+                                    <h3 class="pane-title">Study Preferences</h3>
+                                    <span class="pane-subtitle">Configure daily study capacity and AI explanation settings</span>
+                                </div>
+                            </div>
+
+                            <div class="form-row-2col">
+                                <div class="form-group">
+                                    <label for="daily_study_hours" class="form-label">Daily Study Capacity (Hours)</label>
+                                    <input type="number"
+                                           name="daily_study_hours"
+                                           id="daily_study_hours"
+                                           class="form-control auth-input"
+                                           min="0.5"
+                                           max="16"
+                                           step="0.5"
+                                           value="3.0">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="preferred_study_time" class="form-label">Preferred Study Time</label>
+                                    <select name="preferred_study_time" id="preferred_study_time" class="form-control auth-input auth-select">
+                                        <option value="Early Morning">Early Morning (5 AM - 8 AM)</option>
+                                        <option value="Morning">Morning (8 AM - 12 PM)</option>
+                                        <option value="Afternoon">Afternoon (12 PM - 5 PM)</option>
+                                        <option value="Evening" selected>Evening (5 PM - 9 PM)</option>
+                                        <option value="Night">Night (9 PM - 1 AM)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row-2col">
+                                <div class="form-group">
+                                    <label for="preferred_language" class="form-label">Preferred AI Explanation Language</label>
+                                    <select name="preferred_language" id="preferred_language" class="form-control auth-input auth-select">
+                                        <option value="English" selected>English</option>
+                                        <option value="Hindi">Hindi (हिंदी)</option>
+                                        <option value="Hinglish">Hinglish (Conversational)</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="target_exam" class="form-label">Target Exam / Goal <span class="optional-badge">Optional</span></label>
+                                    <input type="text"
+                                           name="target_exam"
+                                           id="target_exam"
+                                           class="form-control auth-input"
+                                           placeholder="e.g. End-Semester Finals / GATE 2027">
+                                </div>
+                            </div>
+
+                            <div class="wizard-actions-row">
+                                <button type="button" class="btn btn-outline btn-cancel-step" onclick="proceedToStep(2)">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right: 4px;"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                                    <span>Back</span>
+                                </button>
+                                <button type="submit" id="registerSubmitBtn" class="btn btn-auth-submit btn-mockup-primary">
+                                    <span class="btn-submit-text">Create Account</span>
+                                    <svg class="btn-submit-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                                    <div class="auth-btn-spinner" style="display: none;"></div>
+                                </button>
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+
+                <div class="register-footer-prompt">
+                    <span>Already have an account?</span>
+                    <a href="{{ url_for('auth.login') }}" class="auth-link-bold">Sign in here</a>
+                </div>
             </div>
-
-            <div class="form-group">
-                <label for="email">College / Personal Email</label>
-                <input type="email"
-                       name="email"
-                       id="email"
-                       class="form-control"
-                       value="{{ email or '' }}"
-                       placeholder="e.g. priyanshu@college.edu"
-                       required>
-            </div>
-
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password"
-                       name="password"
-                       id="password"
-                       class="form-control"
-                       placeholder="At least 6 characters"
-                       required
-                       minlength="6">
-            </div>
-
-            <div class="form-group">
-                <label for="confirm_password">Confirm Password</label>
-                <input type="password"
-                       name="confirm_password"
-                       id="confirm_password"
-                       class="form-control"
-                       placeholder="Re-enter your password"
-                       required
-                       minlength="6">
-            </div>
-
-            <button type="submit" class="btn btn-primary btn-block">Register Account</button>
-        </form>
-
-        <div class="auth-footer">
-            <p>Already have an account? <a href="{{ url_for('auth.login') }}">Log in here</a></p>
         </div>
     </div>
 </div>
+
+<script>
+function togglePasswordVisibility(fieldId, btnElem) {
+    const input = document.getElementById(fieldId);
+    const showIcon = btnElem.querySelector('.eye-show');
+    const hideIcon = btnElem.querySelector('.eye-hide');
+    if (!input) return;
+
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (showIcon) showIcon.style.display = 'none';
+        if (hideIcon) hideIcon.style.display = 'inline';
+    } else {
+        input.type = 'password';
+        if (showIcon) showIcon.style.display = 'inline';
+        if (hideIcon) hideIcon.style.display = 'none';
+    }
+}
+
+function proceedToStep(stepNumber) {
+    // If advancing from step 1, perform HTML5 validity check on step 1 required fields
+    if (stepNumber > 1) {
+        const fullName = document.getElementById('full_name');
+        const username = document.getElementById('username');
+        const email = document.getElementById('email');
+        const password = document.getElementById('password');
+        const confirmPassword = document.getElementById('confirm_password');
+
+        if (fullName && !fullName.checkValidity()) {
+            fullName.reportValidity();
+            return;
+        }
+        if (username && !username.checkValidity()) {
+            username.reportValidity();
+            return;
+        }
+        if (email && !email.checkValidity()) {
+            email.reportValidity();
+            return;
+        }
+        if (password && !password.checkValidity()) {
+            password.reportValidity();
+            return;
+        }
+        if (confirmPassword && !confirmPassword.checkValidity()) {
+            confirmPassword.reportValidity();
+            return;
+        }
+    }
+
+    // Toggle Panes
+    const p1 = document.getElementById('paneStep1');
+    const p2 = document.getElementById('paneStep2');
+    const p3 = document.getElementById('paneStep3');
+
+    if (p1) p1.style.display = (stepNumber === 1) ? 'block' : 'none';
+    if (p2) p2.style.display = (stepNumber === 2) ? 'block' : 'none';
+    if (p3) p3.style.display = (stepNumber === 3) ? 'block' : 'none';
+
+    // Update Stepper Badges
+    const s1 = document.getElementById('stepIndicator1');
+    const s2 = document.getElementById('stepIndicator2');
+    const s3 = document.getElementById('stepIndicator3');
+    const l1 = document.getElementById('stepLine1');
+    const l2 = document.getElementById('stepLine2');
+
+    // Reset classes
+    [s1, s2, s3].forEach(s => { if (s) { s.classList.remove('active', 'completed'); } });
+    if (l1) l1.classList.remove('completed');
+    if (l2) l2.classList.remove('completed');
+
+    if (stepNumber === 1) {
+        if (s1) s1.classList.add('active');
+    } else if (stepNumber === 2) {
+        if (s1) s1.classList.add('completed');
+        if (l1) l1.classList.add('completed');
+        if (s2) s2.classList.add('active');
+    } else if (stepNumber === 3) {
+        if (s1) s1.classList.add('completed');
+        if (l1) l1.classList.add('completed');
+        if (s2) s2.classList.add('completed');
+        if (l2) l2.classList.add('completed');
+        if (s3) s3.classList.add('active');
+    }
+}
+
+function handleRegisterSubmit(event) {
+    const btn = document.getElementById('registerSubmitBtn');
+    if (!btn) return;
+    const textSpan = btn.querySelector('.btn-submit-text');
+    const arrowIcon = btn.querySelector('.btn-submit-arrow');
+    const spinner = btn.querySelector('.auth-btn-spinner');
+
+    btn.disabled = true;
+    if (textSpan) textSpan.textContent = 'Creating account...';
+    if (arrowIcon) arrowIcon.style.display = 'none';
+    if (spinner) spinner.style.display = 'inline-block';
+}
+</script>
 {% endblock %}

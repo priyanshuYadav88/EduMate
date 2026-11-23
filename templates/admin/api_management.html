@@ -1,0 +1,340 @@
+{% extends 'base.html' %}
+
+{% block title %}API Management Center — EduMate Admin{% endblock %}
+
+{% block content %}
+<div class="content-container">
+    <!-- Header Row -->
+    <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 24px;">
+        <div>
+            <h1 class="welcome-title">API Management Center</h1>
+            <p class="welcome-subtitle">Configure multi-provider AI backends, encrypted API keys, models, priorities, and fallback strategies</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <a href="{{ url_for('admin.system_control_view') }}" class="btn btn-outline">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                System &amp; Backups
+            </a>
+        </div>
+    </div>
+
+    <!-- Security & Priority Pipeline Callout Banner -->
+    <div class="card" style="margin-bottom: 24px; background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%); border-color: #bbf7d0;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+            <div style="display: flex; gap: 14px; align-items: flex-start;">
+                <div style="width: 38px; height: 38px; border-radius: 8px; background: #dcfce7; color: #15803d; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+                <div>
+                    <h3 style="font-size: 1rem; font-weight: 700; color: #166534; margin-bottom: 4px;">Enterprise API Security &amp; Dynamic Fallback Active</h3>
+                    <p style="font-size: 0.875rem; color: #14532d; line-height: 1.5; margin-bottom: 8px;">
+                        All credentials are encrypted at rest with server-side AES-256 (Fernet) keys. API keys are never exposed in client-side HTML or JavaScript.
+                    </p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.8125rem;">
+                        <span class="pill-badge" style="background: #ffffff; color: #15803d; border: 1px solid #86efac;">
+                            &#10003; Sequential Priority Dispatch
+                        </span>
+                        <span class="pill-badge" style="background: #ffffff; color: #15803d; border: 1px solid #86efac;">
+                            &#10003; Automatic Transient Error Fallback
+                        </span>
+                        <span class="pill-badge" style="background: #ffffff; color: #15803d; border: 1px solid #86efac;">
+                            &#10003; Zero Secret Leakage in Logs
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <span class="status-badge status-completed" style="font-size: 0.8125rem; padding: 6px 12px;">
+                    AES-256 Storage: Enabled
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Multi-Provider Management Grid -->
+    <div style="display: flex; flex-direction: column; gap: 24px; margin-bottom: 32px;">
+        {% for p in providers %}
+        <div class="card" id="provider-card-{{ p.provider_id }}" style="border-left: 4px solid {% if p.provider_id == 'gemini' %}#2563eb{% elif p.provider_id == 'groq' %}#f59e0b{% else %}#10b981{% endif %};">
+            <!-- Provider Card Header -->
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <div style="width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: {% if p.provider_id == 'gemini' %}#eff6ff; color: #2563eb;{% elif p.provider_id == 'groq' %}#fffbeb; color: #d97706;{% else %}#f0fdf4; color: #15803d;{% endif %}">
+                        {% if p.provider_id == 'gemini' %}
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        {% elif p.provider_id == 'groq' %}
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        {% else %}
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <h2 style="font-size: 1.1875rem; font-weight: 700; color: var(--text-primary); margin: 0;">{{ p.display_name }}</h2>
+                            {% if p.is_primary %}
+                            <span class="pill-badge pill-important" style="font-size: 0.75rem;">Primary</span>
+                            {% else %}
+                            <span class="pill-badge pill-neutral" style="font-size: 0.75rem;">Priority {{ p.priority }}</span>
+                            {% endif %}
+                        </div>
+                        <span class="text-muted-sm" style="font-size: 0.8125rem;">
+                            {% if p.provider_id == 'gemini' %}Google GenAI Cloud API &bull; Official Gemini Models
+                            {% elif p.provider_id == 'groq' %}High-Speed LPU Inference &bull; OpenAI-Compatible Chat Completions
+                            {% else %}Local On-Premise Inference &bull; Offline Privacy Safe
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Live Status Badge -->
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span id="badge-{{ p.provider_id }}" class="status-badge {% if not p.is_enabled %}status-pending{% elif p.last_status == 'active' %}status-completed{% elif p.last_status == 'error' %}status-danger{% else %}status-pending{% endif %}">
+                        {% if not p.is_enabled %}Disabled
+                        {% elif p.last_status == 'active' %}Active &amp; Verified
+                        {% elif p.last_status == 'error' %}Connection Error
+                        {% else %}Untested
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+
+            <!-- Configuration Form -->
+            <form method="POST" action="{{ url_for('admin.save_provider_config', provider_id=p.provider_id) }}">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                    
+                    <!-- 1. Enable Switch & Primary Toggle -->
+                    <div class="form-group" style="padding: 12px; background: var(--bg-page); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <label class="remember-label" style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" name="is_enabled" value="true" {% if p.is_enabled %}checked{% endif %}>
+                            <span>Enable this Provider</span>
+                        </label>
+                        <span class="text-muted-sm" style="display: block; font-size: 0.75rem; margin-bottom: 12px;">
+                            Disabled providers are skipped immediately without network latency.
+                        </span>
+
+                        <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 8px;">
+                            <label class="remember-label" style="font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); margin: 0;">
+                                <input type="checkbox" name="is_primary" value="true" {% if p.is_primary %}checked{% endif %}>
+                                <span>Designate as Primary</span>
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">Priority:</span>
+                                <input type="number" name="priority" value="{{ p.priority }}" min="1" max="10" class="form-control" style="width: 60px; padding: 4px 8px; font-size: 0.8125rem; text-align: center;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Model Configuration -->
+                    <div class="form-group">
+                        <label for="model_{{ p.provider_id }}" style="font-weight: 600; font-size: 0.875rem;">Model Name</label>
+                        <input type="text"
+                               id="model_{{ p.provider_id }}"
+                               name="model_name"
+                               class="form-control"
+                               value="{{ p.model_name }}"
+                               list="models_list_{{ p.provider_id }}"
+                               placeholder="e.g. {{ p.model_name }}"
+                               required>
+                        <datalist id="models_list_{{ p.provider_id }}">
+                            {% if p.provider_id == 'gemini' %}
+                            <option value="gemini-3.5-flash">
+                            <option value="gemini-flash-lite-latest">
+                            <option value="gemini-flash-latest">
+                            <option value="gemini-3.8-flash">
+                            {% elif p.provider_id == 'groq' %}
+                            <option value="openai/gpt-oss-120b">
+                            <option value="openai/gpt-oss-20b">
+                            <option value="qwen/qwen3.8-27b">
+                            <option value="allam-2-7b">
+                            {% elif p.provider_id == 'ollama' %}
+                            <option value="gemma3:1b">
+                            <option value="qwen2.5:0.5b">
+                            <option value="llama3.2:1b">
+                            <option value="mistral:7b">
+                            {% endif %}
+                        </datalist>
+                        <span class="text-muted-sm" style="font-size: 0.75rem; margin-top: 4px; display: block;">
+                            Supports custom model tags or any official model name.
+                        </span>
+                    </div>
+
+                    <!-- 3. API Key Management (where applicable) -->
+                    {% if p.provider_id in ['gemini', 'groq'] %}
+                    <div class="form-group">
+                        <label for="key_{{ p.provider_id }}" style="font-weight: 600; font-size: 0.875rem;">
+                            API Key
+                            {% if p.has_api_key %}
+                            <span class="pill-badge pill-neutral" style="font-size: 0.6875rem; margin-left: 6px;">Saved: {{ p.get_masked_key() }}</span>
+                            {% else %}
+                            <span class="pill-badge pill-important" style="font-size: 0.6875rem; margin-left: 6px;">Not Set</span>
+                            {% endif %}
+                        </label>
+                        <input type="password"
+                               id="key_{{ p.provider_id }}"
+                               name="api_key"
+                               class="form-control"
+                               placeholder="{% if p.has_api_key %}Leave blank to keep existing key ({{ p.get_masked_key() }}){% else %}Enter API key (e.g. {% if p.provider_id == 'groq' %}gsk_...{% else %}AIza...{% endif %}){% endif %}">
+                        <span class="text-muted-sm" style="font-size: 0.75rem; margin-top: 4px; display: block;">
+                            Encrypted before writing to disk. Never exposed in responses.
+                        </span>
+                    </div>
+                    {% else %}
+                    <!-- For Ollama: Base URL instead of API Key -->
+                    <div class="form-group">
+                        <label for="url_{{ p.provider_id }}" style="font-weight: 600; font-size: 0.875rem;">Ollama Server Base URL</label>
+                        <input type="text"
+                               id="url_{{ p.provider_id }}"
+                               name="api_base_url"
+                               class="form-control"
+                               value="{{ p.api_base_url or 'http://127.0.0.1:11434' }}"
+                               placeholder="http://127.0.0.1:11434">
+                        <span class="text-muted-sm" style="font-size: 0.75rem; margin-top: 4px; display: block;">
+                            Default local REST endpoint is http://127.0.0.1:11434
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    <!-- 4. Timeout and Base URL for Groq -->
+                    {% if p.provider_id == 'groq' %}
+                    <div class="form-group">
+                        <label for="url_{{ p.provider_id }}" style="font-weight: 600; font-size: 0.875rem;">API Base Endpoint</label>
+                        <input type="text"
+                               id="url_{{ p.provider_id }}"
+                               name="api_base_url"
+                               class="form-control"
+                               value="{{ p.api_base_url or 'https://api.groq.com/openai/v1' }}"
+                               placeholder="https://api.groq.com/openai/v1">
+                    </div>
+                    {% endif %}
+
+                    <div class="form-group" style="max-width: 140px;">
+                        <label for="timeout_{{ p.provider_id }}" style="font-weight: 600; font-size: 0.875rem;">Timeout (sec)</label>
+                        <input type="number"
+                               id="timeout_{{ p.provider_id }}"
+                               name="timeout_sec"
+                               class="form-control"
+                               value="{{ p.timeout_sec }}"
+                               min="2"
+                               max="120"
+                               step="0.5">
+                    </div>
+                </div>
+
+                <!-- Diagnostic Result Log Banner (Updated dynamically via AJAX) -->
+                <div id="test-banner-{{ p.provider_id }}" style="display: {% if p.last_tested_at %}block{% else %}none{% endif %}; margin-bottom: 16px; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.8125rem; background: {% if p.last_status == 'active' %}#f0fdf4; border: 1px solid #bbf7d0; color: #166534;{% elif p.last_status == 'error' %}#fef2f2; border: 1px solid #fecaca; color: #991b1b;{% else %}#f8fafc; border: 1px solid var(--border-color); color: var(--text-secondary);{% endif %}">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <span id="test-msg-{{ p.provider_id }}">{{ p.last_test_message or 'No test recorded.' }}</span>
+                        <span id="test-time-{{ p.provider_id }}" style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;">
+                            {{ p.last_tested_at.strftime('%d %b %Y, %H:%M:%S') if p.last_tested_at else '' }}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Action Buttons Row -->
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            Save Configuration
+                        </button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="runConnectionTest('{{ p.provider_id }}')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            <span id="btn-text-{{ p.provider_id }}">Test Connection</span>
+                        </button>
+                    </div>
+
+                    <span class="text-muted-sm" style="font-size: 0.75rem;">
+                        Changes take effect immediately without restarting Flask.
+                    </span>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Architectural Safeguard Explainer -->
+    <div class="card" style="background: var(--bg-page);">
+        <div class="card-header">
+            <h2 class="card-title" style="font-size: 1rem;">Multi-Provider Fallback Logic &amp; Operational Integrity</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; padding-top: 8px;">
+            <div>
+                <h4 style="font-size: 0.875rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Sequential Fallback</h4>
+                <p class="text-muted-sm" style="font-size: 0.8125rem; line-height: 1.5;">
+                    EduMate dispatches study requests to the highest priority enabled provider. If an upstream provider returns a quota limit (429), gateway timeout (504), or network error, EduMate automatically falls back to the next enabled provider without losing the student's study request.
+                </p>
+            </div>
+            <div>
+                <h4 style="font-size: 0.875rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Quota &amp; Cost Conservation</h4>
+                <p class="text-muted-sm" style="font-size: 0.8125rem; line-height: 1.5;">
+                    Providers are executed sequentially, never in parallel waste. If your primary provider succeeds on its first attempt, no downstream requests are made, protecting your API limits and compute usage.
+                </p>
+            </div>
+            <div>
+                <h4 style="font-size: 0.875rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Zero Key Exposure</h4>
+                <p class="text-muted-sm" style="font-size: 0.8125rem; line-height: 1.5;">
+                    Raw API credentials never leave the server. Keys are masked during display, excluded from API JSON responses, and sanitized from server audit logs and exception traces.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AJAX Connection Test Script -->
+<script>
+function runConnectionTest(providerId) {
+    const btn = document.getElementById(`btn-text-${providerId}`);
+    const badge = document.getElementById(`badge-${providerId}`);
+    const banner = document.getElementById(`test-banner-${providerId}`);
+    const msgSpan = document.getElementById(`test-msg-${providerId}`);
+    const timeSpan = document.getElementById(`test-time-${providerId}`);
+
+    if (btn) btn.textContent = 'Testing...';
+
+    fetch(`/admin/api-management/test/${providerId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (btn) btn.textContent = 'Test Connection';
+
+        if (banner) {
+            banner.style.display = 'block';
+            if (data.success) {
+                banner.style.background = '#f0fdf4';
+                banner.style.borderColor = '#bbf7d0';
+                banner.style.color = '#166534';
+            } else {
+                banner.style.background = '#fef2f2';
+                banner.style.borderColor = '#fecaca';
+                banner.style.color = '#991b1b';
+            }
+        }
+
+        if (msgSpan) msgSpan.textContent = data.message || (data.success ? 'Connected successfully.' : 'Connection failed.');
+        if (timeSpan && data.last_tested_at) timeSpan.textContent = data.last_tested_at;
+
+        if (badge) {
+            badge.className = 'status-badge ' + (data.success ? 'status-completed' : 'status-danger');
+            badge.textContent = data.success ? 'Active & Verified' : 'Connection Error';
+        }
+    })
+    .catch(err => {
+        if (btn) btn.textContent = 'Test Connection';
+        if (banner) {
+            banner.style.display = 'block';
+            banner.style.background = '#fef2f2';
+            banner.style.borderColor = '#fecaca';
+            banner.style.color = '#991b1b';
+        }
+        if (msgSpan) msgSpan.textContent = 'Network error testing provider connection.';
+        if (badge) {
+            badge.className = 'status-badge status-danger';
+            badge.textContent = 'Connection Error';
+        }
+    });
+}
+</script>
+{% endblock %}

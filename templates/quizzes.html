@@ -7,7 +7,7 @@
     <div class="admin-header-row" style="flex-wrap: wrap; gap: 12px;">
         <div>
             <h1 class="welcome-title">Practice Quizzes & Self-Assessment</h1>
-            <p class="welcome-subtitle">Generate interactive 5-question multiple choice drills powered by EduMate AI with instant scoring</p>
+            <p class="welcome-subtitle">Step-by-step interactive MCQ drills with real-time timer, syllabus grounding, and instant detailed explanations</p>
         </div>
     </div>
 
@@ -27,9 +27,10 @@
                 </div>
 
                 <div style="margin: 16px 0 14px 0;">
-                    <label for="topicSelect-{{ subj.id }}" class="form-label" style="font-size: 12.5px; font-weight: 600;">Choose Topic for Drill:</label>
+                    <label for="topicSelect-{{ subj.id }}" class="form-label" style="font-size: 12.5px; font-weight: 600;">Choose Drill Scope:</label>
                     {% if subj.topics %}
                     <select id="topicSelect-{{ subj.id }}" class="form-control" style="font-size: 13px; padding: 7px 10px;">
+                        <option value="all" data-topic-title="Full Subject Assessment">🎯 Full Subject Assessment (All Units)</option>
                         {% for t in subj.topics %}
                         <option value="{{ t.id }}" data-topic-title="{{ t.title }}">
                             {{ t.unit_name ~ ': ' if t.unit_name else '' }}{{ t.title }}
@@ -69,7 +70,7 @@
     <div class="card" style="margin-top: 28px;">
         <div class="card-header">
             <h2 class="card-title">Recent Quiz Attempts & Performance History</h2>
-            <span class="text-muted-sm">Persistent records stored in SQLite database</span>
+            <span class="text-muted-sm">Persistent records stored in database</span>
         </div>
         <div class="table-responsive">
             <table class="data-table">
@@ -78,7 +79,7 @@
                         <th>Subject</th>
                         <th>Topic / Quiz Title</th>
                         <th>Score</th>
-                        <th>Percentage</th>
+                        <th>Accuracy</th>
                         <th>Attempt Date</th>
                     </tr>
                 </thead>
@@ -119,23 +120,24 @@
     </div>
 </div>
 
-<!-- Interactive Quiz Modal -->
+<!-- Interactive Quiz Runner Modal -->
 <div class="modal-overlay" id="quizModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 1050; align-items: center; justify-content: center; padding: 16px;">
-    <div class="modal-card card" style="max-width: 680px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
-        <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+    <div class="modal-card card" style="max-width: 680px; width: 100%; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+        <!-- Modal Top Header -->
+        <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #ffffff;">
             <div>
-                <h3 id="quizModalTitle" class="card-title" style="margin: 0; font-size: 16px;">Practice MCQ Drill</h3>
+                <h3 id="quizModalTitle" class="card-title" style="margin: 0; font-size: 16px; color: #1e293b;">Practice MCQ Drill</h3>
                 <span id="quizModalSubtitle" class="text-muted-sm" style="display: block; margin-top: 2px;">Subject & Topic</span>
             </div>
-            <button type="button" class="btn btn-outline btn-sm" onclick="closeQuizModal()" style="border: none; font-size: 18px; line-height: 1; padding: 4px 8px;">&times;</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="attemptCloseQuizModal()" style="border: none; font-size: 18px; line-height: 1; padding: 4px 8px;">&times;</button>
         </div>
 
-        <div id="quizModalBody" style="padding: 20px; overflow-y: auto; flex: 1;">
+        <div id="quizModalBody" style="padding: 20px; overflow-y: auto; flex: 1; background: #ffffff;">
             <!-- Loading State -->
             <div id="quizLoadingState" style="text-align: center; padding: 40px 20px;">
                 <div style="display: inline-block; width: 36px; height: 36px; border: 3px solid #e2e8f0; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
-                <p style="margin-top: 14px; font-weight: 500; color: var(--text-primary);">Generating 5 syllabus questions with EduMate AI...</p>
-                <span class="text-muted-sm">Extracting key concepts, formulas, and definitions</span>
+                <p style="margin-top: 14px; font-weight: 600; color: var(--text-primary);">Generating 5 syllabus questions with EduMate AI...</p>
+                <span class="text-muted-sm">Extracting key concepts, formulas, and definitions from approved course materials</span>
             </div>
 
             <!-- Error State -->
@@ -144,30 +146,88 @@
                 <button type="button" class="btn btn-outline" onclick="closeQuizModal()">Close</button>
             </div>
 
-            <!-- Active Questions Form -->
+            <!-- Active Step-by-Step Questions Runner -->
             <div id="quizQuestionsContainer" style="display: none;">
-                <form id="quizForm" onsubmit="handleQuizSubmit(event)">
-                    <div id="questionsList" style="display: flex; flex-direction: column; gap: 20px;"></div>
-                    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                        <span class="text-muted-sm">All 5 questions are compulsory.</span>
-                        <button type="submit" id="submitQuizBtn" class="btn btn-primary">
-                            Submit & Score Quiz &rarr;
-                        </button>
-                    </div>
-                </form>
-            </div>
+                <!-- Progress Bar & Question Counter & Countdown Timer -->
+                <div style="margin-bottom: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span id="questionCounterBadge" class="pill-badge pill-info" style="font-size: 12px; font-weight: 700; padding: 4px 10px;">
+                            Question 1 of 5
+                        </span>
 
-            <!-- Quiz Results Score Card -->
-            <div id="quizResultsContainer" style="display: none;">
-                <div style="background-color: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 22px; text-align: center; margin-bottom: 20px;">
-                    <span class="stat-label">Your Final Drill Score</span>
-                    <div id="quizScoreDisplay" style="font-size: 38px; font-weight: 800; color: var(--primary); margin: 6px 0;">
-                        0 / 5
+                        <!-- Timer Box -->
+                        <div id="quizTimerBox" class="pill-badge" style="background: #eff6ff; color: #1e40af; border: 1.5px solid #bfdbfe; font-size: 13px; font-weight: 700; padding: 5px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            <span id="quizTimerText">01:00</span>
+                        </div>
                     </div>
-                    <p id="quizScoreFeedback" style="font-weight: 600; color: var(--text-secondary); margin: 0;"></p>
+
+                    <!-- Progress Bar Track -->
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                        <div id="quizProgressBar" style="height: 100%; width: 20%; background: #2563eb; transition: width 0.25s ease;"></div>
+                    </div>
                 </div>
 
-                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary);">Answer Breakdown & Conceptual Explanations</h4>
+                <!-- Single Question Card -->
+                <div class="question-block" style="border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 20px; background: #f8fafc; margin-bottom: 20px;">
+                    <div id="currentQuestionText" style="font-size: 15px; font-weight: 600; color: #1e293b; line-height: 1.5; margin-bottom: 18px;"></div>
+                    <div id="currentOptionsGroup" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                </div>
+
+                <!-- Runner Navigation Controls -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 14px; border-top: 1px solid var(--border-color);">
+                    <button type="button" id="prevQuestionBtn" class="btn btn-outline" onclick="goToPrevQuestion()" style="display: inline-flex; align-items: center; gap: 6px;">
+                        &larr; Previous
+                    </button>
+
+                    <!-- Question Navigator Indicators -->
+                    <div id="questionIndicatorsRow" style="display: flex; gap: 6px; align-items: center;"></div>
+
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" id="nextQuestionBtn" class="btn btn-primary" onclick="goToNextQuestion()" style="display: inline-flex; align-items: center; gap: 6px;">
+                            Next &rarr;
+                        </button>
+                        <button type="button" id="submitQuizBtn" class="btn btn-primary" onclick="confirmSubmitQuiz()" style="display: none; background: #16a34a; border-color: #16a34a;">
+                            Submit Quiz &rarr;
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quiz Results Score & Detailed Explanations Screen -->
+            <div id="quizResultsContainer" style="display: none;">
+                <div style="background-color: #f8fafc; border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 22px; text-align: center; margin-bottom: 20px;">
+                    <span class="stat-label" style="text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px;">Your Quiz Assessment Score</span>
+                    <div id="quizScoreDisplay" style="font-size: 42px; font-weight: 800; color: var(--primary); margin: 6px 0;">
+                        0 / 5
+                    </div>
+                    <p id="quizScoreFeedback" style="font-weight: 600; font-size: 14px; margin: 0;"></p>
+
+                    <!-- Metrics Breakdown Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                        <div style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                            <span style="font-size: 11px; color: #64748b; display: block;">Total Questions</span>
+                            <strong id="metricTotalQuestions" style="font-size: 16px; color: #1e293b;">5</strong>
+                        </div>
+                        <div style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #bbf7d0;">
+                            <span style="font-size: 11px; color: #166534; display: block;">Correct</span>
+                            <strong id="metricCorrect" style="font-size: 16px; color: #16a34a;">0</strong>
+                        </div>
+                        <div style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #fecaca;">
+                            <span style="font-size: 11px; color: #991b1b; display: block;">Incorrect</span>
+                            <strong id="metricIncorrect" style="font-size: 16px; color: #dc2626;">0</strong>
+                        </div>
+                        <div style="background: #ffffff; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                            <span style="font-size: 11px; color: #64748b; display: block;">Unanswered</span>
+                            <strong id="metricUnanswered" style="font-size: 16px; color: #64748b;">0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <h4 style="font-size: 14.5px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>Question Breakdown & Conceptual Explanations</span>
+                </h4>
                 <div id="quizReviewList" style="display: flex; flex-direction: column; gap: 16px;"></div>
 
                 <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
@@ -179,37 +239,71 @@
     </div>
 </div>
 
+<!-- Manual Submit Confirmation Modal -->
+<div class="modal-overlay" id="submitConfirmModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 1060; align-items: center; justify-content: center; padding: 16px;">
+    <div class="modal-card card" style="max-width: 440px; width: 100%; padding: 22px;">
+        <h3 class="card-title" style="margin-top: 0; font-size: 16px; color: #1e293b;">Submit Quiz Assessment?</h3>
+        <p id="submitConfirmWarningText" style="font-size: 13px; color: #64748b; margin: 10px 0 20px 0;">
+            Are you sure you want to finish and score this quiz?
+        </p>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn btn-outline" onclick="closeSubmitConfirmModal()">Keep Answering</button>
+            <button type="button" class="btn btn-primary" onclick="executeQuizSubmit()" style="background: #16a34a; border-color: #16a34a;">Confirm & Submit</button>
+        </div>
+    </div>
+</div>
+
 <style>
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
-.question-block {
-    background: #ffffff;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 16px;
-}
-.question-text {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 12px;
-}
-.option-label {
+.quiz-option-card {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 9px 12px;
-    margin-bottom: 6px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
+    gap: 12px;
+    padding: 12px 14px;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 13px;
-    transition: background-color 0.15s ease;
+    font-size: 13.5px;
+    color: #1e293b;
+    transition: all 0.15s ease;
 }
-.option-label:hover {
-    background-color: #f8fafc;
+.quiz-option-card:hover {
+    border-color: #93c5fd;
+    background-color: #f0f7ff;
+}
+.quiz-option-card.selected {
+    border-color: #2563eb;
+    background-color: #eff6ff;
+    font-weight: 600;
+}
+.indicator-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #64748b;
+    transition: all 0.15s ease;
+}
+.indicator-dot.active {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #ffffff;
+}
+.indicator-dot.answered {
+    border-color: #22c55e;
+    background: #f0fdf4;
+    color: #16a34a;
 }
 </style>
 {% endblock %}
@@ -221,6 +315,17 @@ let currentActiveSubjectId = null;
 let currentActiveSubjectName = '';
 let currentActiveTopicTitle = '';
 let activeQuizQuestions = [];
+let userSelectedAnswers = [];
+let currentQuestionIndex = 0;
+let isQuizSubmitting = false;
+
+// Per-question timer state (60 seconds per question)
+const QUESTION_DURATION_SECONDS = 60;
+let questionRemainingSeconds = QUESTION_DURATION_SECONDS;
+let questionTimerInterval = null;
+
+// Session storage key for refresh resilience
+const QUIZ_STORAGE_KEY = 'edumate_active_quiz_session';
 
 async function launchQuizModal(subjectId, subjectName) {
     const select = document.getElementById(`topicSelect-${subjectId}`);
@@ -229,7 +334,9 @@ async function launchQuizModal(subjectId, subjectName) {
         return;
     }
 
-    const topicId = parseInt(select.value);
+    const val = select.value;
+    const isAll = (val === 'all');
+    const topicId = isAll ? 'all' : parseInt(val);
     const selectedOption = select.options[select.selectedIndex];
     const topicTitle = selectedOption.getAttribute('data-topic-title') || selectedOption.text;
 
@@ -238,8 +345,8 @@ async function launchQuizModal(subjectId, subjectName) {
     currentActiveSubjectName = subjectName;
     currentActiveTopicTitle = topicTitle;
 
-    document.getElementById('quizModalTitle').textContent = `Practice MCQ: ${topicTitle}`;
-    document.getElementById('quizModalSubtitle').textContent = `${subjectName} • 5 Questions`;
+    document.getElementById('quizModalTitle').textContent = isAll ? `Full Subject Assessment: ${subjectName}` : `Practice MCQ: ${topicTitle}`;
+    document.getElementById('quizModalSubtitle').textContent = `${subjectName} • 5 Questions • 60s per question`;
 
     // Show modal and reset state
     document.getElementById('quizModal').style.display = 'flex';
@@ -253,6 +360,7 @@ async function launchQuizModal(subjectId, subjectName) {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
+                subject_id: subjectId,
                 topic_id: topicId,
                 content_type: 'mcq'
             })
@@ -262,11 +370,20 @@ async function launchQuizModal(subjectId, subjectName) {
 
         if (data.success && data.questions && data.questions.length > 0) {
             activeQuizQuestions = data.questions;
-            renderQuizQuestions(data.questions);
+            userSelectedAnswers = new Array(activeQuizQuestions.length).fill(null);
+            currentQuestionIndex = 0;
+            isQuizSubmitting = false;
+
+            // Save state for refresh resilience
+            saveQuizStateToStorage();
+
             document.getElementById('quizLoadingState').style.display = 'none';
             document.getElementById('quizQuestionsContainer').style.display = 'block';
+
+            renderSingleQuestion(currentQuestionIndex);
+            startQuestionTimer();
         } else {
-            throw new Error(data.error || "Unable to extract multiple-choice questions for this topic.");
+            throw new Error(data.error || "Unable to generate multiple-choice questions for this topic.");
         }
     } catch (err) {
         document.getElementById('quizLoadingState').style.display = 'none';
@@ -275,81 +392,224 @@ async function launchQuizModal(subjectId, subjectName) {
     }
 }
 
-function renderQuizQuestions(questions) {
-    const list = document.getElementById('questionsList');
-    list.innerHTML = '';
+function renderSingleQuestion(idx) {
+    if (!activeQuizQuestions || activeQuizQuestions.length === 0) return;
+    const total = activeQuizQuestions.length;
+    const q = activeQuizQuestions[idx];
 
-    questions.forEach((q, qIdx) => {
-        const block = document.createElement('div');
-        block.className = 'question-block';
+    // Update Counter & Progress Bar
+    document.getElementById('questionCounterBadge').textContent = `Question ${idx + 1} of ${total}`;
+    const pct = Math.round(((idx + 1) / total) * 100);
+    document.getElementById('quizProgressBar').style.width = `${pct}%`;
 
-        const qTitle = document.createElement('div');
-        qTitle.className = 'question-text';
-        qTitle.textContent = `${qIdx + 1}. ${q.question}`;
-        block.appendChild(qTitle);
+    // Update Question Text
+    document.getElementById('currentQuestionText').textContent = `${idx + 1}. ${q.question}`;
 
-        const optionsGroup = document.createElement('div');
-        (q.options || []).forEach((opt, oIdx) => {
-            const optLabel = document.createElement('label');
-            optLabel.className = 'option-label';
+    // Render Options
+    const optGroup = document.getElementById('currentOptionsGroup');
+    optGroup.innerHTML = '';
 
-            const radio = document.createElement('input');
-            radio.type = 'radio';
-            radio.name = `question_${qIdx}`;
-            radio.value = oIdx;
-            radio.required = true;
+    (q.options || []).forEach((optText, oIdx) => {
+        const card = document.createElement('label');
+        card.className = 'quiz-option-card';
+        if (userSelectedAnswers[idx] === oIdx) {
+            card.classList.add('selected');
+        }
 
-            const span = document.createElement('span');
-            span.textContent = opt;
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = `option_q_${idx}`;
+        radio.value = oIdx;
+        radio.checked = (userSelectedAnswers[idx] === oIdx);
+        radio.style.accentColor = '#2563eb';
+        radio.style.transform = 'scale(1.15)';
 
-            optLabel.appendChild(radio);
-            optLabel.appendChild(span);
-            optionsGroup.appendChild(optLabel);
-        });
+        radio.onchange = () => {
+            userSelectedAnswers[idx] = oIdx;
+            saveQuizStateToStorage();
+            updateQuestionIndicators();
+            // Highlight selected card
+            Array.from(optGroup.children).forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+        };
 
-        block.appendChild(optionsGroup);
-        list.appendChild(block);
+        const span = document.createElement('span');
+        span.textContent = optText;
+
+        card.appendChild(radio);
+        card.appendChild(span);
+        optGroup.appendChild(card);
+    });
+
+    // Update Prev / Next / Submit buttons
+    const prevBtn = document.getElementById('prevQuestionBtn');
+    const nextBtn = document.getElementById('nextQuestionBtn');
+    const submitBtn = document.getElementById('submitQuizBtn');
+
+    prevBtn.disabled = (idx === 0);
+
+    if (idx === total - 1) {
+        nextBtn.style.display = 'none';
+        submitBtn.style.display = 'inline-flex';
+    } else {
+        nextBtn.style.display = 'inline-flex';
+        submitBtn.style.display = 'none';
+    }
+
+    updateQuestionIndicators();
+}
+
+function updateQuestionIndicators() {
+    const row = document.getElementById('questionIndicatorsRow');
+    row.innerHTML = '';
+
+    activeQuizQuestions.forEach((_, qIdx) => {
+        const dot = document.createElement('div');
+        dot.className = 'indicator-dot';
+        dot.textContent = qIdx + 1;
+
+        if (qIdx === currentQuestionIndex) {
+            dot.classList.add('active');
+        } else if (userSelectedAnswers[qIdx] !== null) {
+            dot.classList.add('answered');
+        }
+
+        dot.onclick = () => {
+            if (qIdx !== currentQuestionIndex) {
+                currentQuestionIndex = qIdx;
+                renderSingleQuestion(currentQuestionIndex);
+                resetQuestionTimer();
+            }
+        };
+
+        row.appendChild(dot);
     });
 }
 
-async function handleQuizSubmit(e) {
-    e.preventDefault();
+function goToPrevQuestion() {
+    if (currentQuestionIndex > 0) {
+        currentQuestionIndex--;
+        renderSingleQuestion(currentQuestionIndex);
+        resetQuestionTimer();
+    }
+}
+
+function goToNextQuestion() {
+    if (currentQuestionIndex < activeQuizQuestions.length - 1) {
+        currentQuestionIndex++;
+        renderSingleQuestion(currentQuestionIndex);
+        resetQuestionTimer();
+    }
+}
+
+// Timer Logic
+function startQuestionTimer() {
+    clearInterval(questionTimerInterval);
+    questionRemainingSeconds = QUESTION_DURATION_SECONDS;
+    updateTimerDisplay();
+
+    questionTimerInterval = setInterval(() => {
+        questionRemainingSeconds--;
+        updateTimerDisplay();
+
+        if (questionRemainingSeconds <= 0) {
+            clearInterval(questionTimerInterval);
+            handleQuestionTimeout();
+        }
+    }, 1000);
+}
+
+function resetQuestionTimer() {
+    startQuestionTimer();
+}
+
+function updateTimerDisplay() {
+    const timerText = document.getElementById('quizTimerText');
+    const timerBox = document.getElementById('quizTimerBox');
+    const mins = Math.floor(questionRemainingSeconds / 60);
+    const secs = questionRemainingSeconds % 60;
+    const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    timerText.textContent = formatted;
+
+    if (questionRemainingSeconds <= 10) {
+        timerBox.style.background = '#fef2f2';
+        timerBox.style.color = '#dc2626';
+        timerBox.style.borderColor = '#fca5a5';
+    } else if (questionRemainingSeconds <= 20) {
+        timerBox.style.background = '#fffbeb';
+        timerBox.style.color = '#b45309';
+        timerBox.style.borderColor = '#fde68a';
+    } else {
+        timerBox.style.background = '#eff6ff';
+        timerBox.style.color = '#1e40af';
+        timerBox.style.borderColor = '#bfdbfe';
+    }
+}
+
+function handleQuestionTimeout() {
+    // If not last question, auto-advance
+    if (currentQuestionIndex < activeQuizQuestions.length - 1) {
+        goToNextQuestion();
+    } else {
+        // Last question timed out -> auto submit
+        executeQuizSubmit();
+    }
+}
+
+function confirmSubmitQuiz() {
+    const unansweredCount = userSelectedAnswers.filter(a => a === null).length;
+    const warningText = document.getElementById('submitConfirmWarningText');
+    if (unansweredCount > 0) {
+        warningText.innerHTML = `You have <strong style="color: #dc2626;">${unansweredCount} unanswered question(s)</strong>. Are you sure you want to finish and submit now?`;
+    } else {
+        warningText.textContent = "All 5 questions have been answered. Ready to submit and view your conceptual breakdown?";
+    }
+    document.getElementById('submitConfirmModal').style.display = 'flex';
+}
+
+function closeSubmitConfirmModal() {
+    document.getElementById('submitConfirmModal').style.display = 'none';
+}
+
+async function executeQuizSubmit() {
+    closeSubmitConfirmModal();
+    clearInterval(questionTimerInterval);
+
+    if (isQuizSubmitting) return;
+    isQuizSubmitting = true;
+
     const submitBtn = document.getElementById('submitQuizBtn');
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Submitting & Scoring...';
-
-    // Collect answers
-    const userAnswers = [];
-    activeQuizQuestions.forEach((_, qIdx) => {
-        const selected = document.querySelector(`input[name="question_${qIdx}"]:checked`);
-        userAnswers.push(selected ? parseInt(selected.value) : null);
-    });
+    submitBtn.textContent = 'Scoring...';
 
     try {
         const res = await fetch('/api/quiz/submit', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
-                topic_id: currentActiveTopicId,
+                topic_id: currentActiveTopicId === 'all' ? null : currentActiveTopicId,
                 subject_id: currentActiveSubjectId,
                 title: `${currentActiveTopicTitle} MCQ Drill`,
                 questions: activeQuizQuestions,
-                answers: userAnswers
+                answers: userSelectedAnswers
             })
         });
 
         const data = await res.json();
         if (data.success) {
+            clearQuizStorage();
             renderQuizResults(data);
         } else {
             alert(data.error || "Scoring failed.");
+            isQuizSubmitting = false;
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Submit & Score Quiz →';
+            submitBtn.textContent = 'Submit Quiz →';
         }
     } catch (err) {
         alert("Network error while submitting answers: " + err.message);
+        isQuizSubmitting = false;
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Submit & Score Quiz →';
+        submitBtn.textContent = 'Submit Quiz →';
     }
 }
 
@@ -360,15 +620,22 @@ function renderQuizResults(data) {
     const scoreDisplay = document.getElementById('quizScoreDisplay');
     scoreDisplay.textContent = `${data.score} / ${data.total_questions}`;
 
+    // Update Metrics Grid
+    document.getElementById('metricTotalQuestions').textContent = data.total_questions;
+    document.getElementById('metricCorrect').textContent = data.correct_count ?? data.score;
+    document.getElementById('metricIncorrect').textContent = data.incorrect_count ?? (data.total_questions - data.score);
+    document.getElementById('metricUnanswered').textContent = data.unanswered_count ?? 0;
+
     const feedback = document.getElementById('quizScoreFeedback');
-    if (data.percentage >= 80) {
-        feedback.textContent = `Excellent mastery! ${data.percentage}% conceptual recall.`;
-        feedback.style.color = 'var(--success)';
-    } else if (data.percentage >= 50) {
-        feedback.textContent = `Good effort! ${data.percentage}% achieved. A quick revision will help solidify weak areas.`;
-        feedback.style.color = 'var(--primary)';
+    const pct = data.percentage ?? 0;
+    if (pct >= 80) {
+        feedback.textContent = `🎉 Excellent mastery! ${pct}% conceptual recall.`;
+        feedback.style.color = '#16a34a';
+    } else if (pct >= 50) {
+        feedback.textContent = `👍 Good effort! ${pct}% achieved. A quick revision will help solidify weak areas.`;
+        feedback.style.color = '#2563eb';
     } else {
-        feedback.textContent = `Needs reinforcement. ${data.percentage}% scored. Review topic notes and reattempt.`;
+        feedback.textContent = `⚠️ Needs reinforcement. ${pct}% scored. Review topic notes and reattempt.`;
         feedback.style.color = '#dc2626';
     }
 
@@ -378,33 +645,48 @@ function renderQuizResults(data) {
     (data.results || []).forEach((resItem, idx) => {
         const itemBox = document.createElement('div');
         itemBox.className = 'question-block';
-        itemBox.style.borderLeft = resItem.is_correct ? '4px solid var(--success)' : '4px solid #dc2626';
+        itemBox.style.border = '1px solid #e2e8f0';
+        itemBox.style.borderRadius = '8px';
+        itemBox.style.padding = '16px';
+        itemBox.style.borderLeft = resItem.is_correct ? '4px solid #16a34a' : '4px solid #dc2626';
 
-        const statusIcon = resItem.is_correct ? '✓ Correct' : '✗ Incorrect';
-        const statusColor = resItem.is_correct ? 'var(--success)' : '#dc2626';
+        let statusText = '✓ Correct';
+        let statusColor = '#16a34a';
+        if (resItem.is_unanswered) {
+            statusText = '— Unanswered';
+            statusColor = '#64748b';
+        } else if (!resItem.is_correct) {
+            statusText = '✗ Incorrect';
+            statusColor = '#dc2626';
+        }
 
         let optionsHtml = '';
         (resItem.options || []).forEach((opt, oIdx) => {
             let badge = '';
             let bg = '#ffffff';
+            let border = '#e2e8f0';
+
             if (oIdx === resItem.correct_answer) {
-                badge = ' <span class="pill-badge pill-important" style="font-size:11px; margin-left:6px;">Correct Answer</span>';
+                badge = ' <span class="pill-badge" style="font-size:11px; margin-left:6px; background:#dcfce7; color:#15803d; border:1px solid #bbf7d0;">Correct Answer</span>';
                 bg = '#f0fdf4';
+                border = '#86efac';
             }
             if (oIdx === resItem.user_answer && !resItem.is_correct) {
-                badge = ' <span class="pill-badge pill-neutral" style="font-size:11px; margin-left:6px; background:#fee2e2; color:#b91c1c;">Your Choice</span>';
+                badge = ' <span class="pill-badge" style="font-size:11px; margin-left:6px; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;">Your Choice</span>';
                 bg = '#fef2f2';
+                border = '#fca5a5';
             }
-            optionsHtml += `<div style="padding: 6px 10px; margin-bottom: 4px; font-size: 13px; background: ${bg}; border-radius: 4px;">${escapeHtml(opt)}${badge}</div>`;
+
+            optionsHtml += `<div style="padding: 8px 12px; margin-bottom: 6px; font-size: 13px; background: ${bg}; border: 1px solid ${border}; border-radius: 6px;">${escapeHtml(opt)}${badge}</div>`;
         });
 
         itemBox.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="font-weight: 700; font-size: 13.5px; color: var(--text-primary);">${idx + 1}. ${escapeHtml(resItem.question)}</span>
-                <span style="font-weight: 700; font-size: 12px; color: ${statusColor};">${statusIcon}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="font-weight: 700; font-size: 14px; color: var(--text-primary);">${idx + 1}. ${escapeHtml(resItem.question)}</span>
+                <span style="font-weight: 700; font-size: 12px; color: ${statusColor};">${statusText}</span>
             </div>
-            <div style="margin: 8px 0;">${optionsHtml}</div>
-            ${resItem.explanation ? `<div style="font-size: 12px; color: var(--text-secondary); background: #f8fafc; padding: 8px 10px; border-radius: 4px; margin-top: 6px;"><strong>Explanation:</strong> ${escapeHtml(resItem.explanation)}</div>` : ''}
+            <div style="margin: 10px 0;">${optionsHtml}</div>
+            ${resItem.explanation ? `<div style="font-size: 12.5px; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 6px; margin-top: 8px;"><strong>Explanation:</strong> ${escapeHtml(resItem.explanation)}</div>` : ''}
         `;
         reviewList.appendChild(itemBox);
     });
@@ -416,12 +698,41 @@ function retakeCurrentQuiz() {
     }
 }
 
+function attemptCloseQuizModal() {
+    if (document.getElementById('quizQuestionsContainer').style.display === 'block') {
+        if (confirm("Are you sure you want to exit? Your current quiz progress will be closed.")) {
+            closeQuizModal();
+        }
+    } else {
+        closeQuizModal();
+    }
+}
+
 function closeQuizModal() {
+    clearInterval(questionTimerInterval);
+    clearQuizStorage();
     document.getElementById('quizModal').style.display = 'none';
-    // If completed, refresh page to show newly recorded attempt in history table
     if (document.getElementById('quizResultsContainer').style.display === 'block') {
         window.location.reload();
     }
+}
+
+// Storage helpers for refresh safety
+function saveQuizStateToStorage() {
+    const payload = {
+        topicId: currentActiveTopicId,
+        subjectId: currentActiveSubjectId,
+        subjectName: currentActiveSubjectName,
+        topicTitle: currentActiveTopicTitle,
+        questions: activeQuizQuestions,
+        answers: userSelectedAnswers,
+        currentIndex: currentQuestionIndex
+    };
+    sessionStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function clearQuizStorage() {
+    sessionStorage.removeItem(QUIZ_STORAGE_KEY);
 }
 
 function escapeHtml(text) {

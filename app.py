@@ -2,14 +2,16 @@ import os
 import re
 import io
 import json
+import uuid
 from datetime import date, datetime, timedelta, timezone
-from flask import Flask, render_template, redirect, url_for, request, jsonify, flash
+from flask import Flask, render_template, redirect, url_for, request, jsonify, flash, session, abort, current_app
 from flask_login import LoginManager, login_required, current_user
 from dotenv import load_dotenv
 from models import (
     db, User, Subject, Topic, Task, Exam, TimetableEntry,
     RoadmapPlan, RoadmapItem, OfficialExamDirectory, AuditLog,
-    UploadedPdfDocument, SystemSetting, QuizAttempt, ChatMessage
+    UploadedPdfDocument, SystemSetting, QuizAttempt, ChatMessage,
+    AIProviderConfig, UserProfile, cleanup_verified_demo_accounts
 )
 from auth import auth_bp
 from admin import admin_bp
@@ -30,6 +32,65 @@ def create_app(test_config=None):
 
     # Initialize extensions
     db.init_app(app)
+
+    # Ensure default AI provider configurations exist safely
+    with app.app_context():
+        try:
+            db.create_all()
+            if not SystemSetting.query.filter_by(key='allow_registrations').first():
+                SystemSetting.set_val('allow_registrations', 'true', 'Allow Public Student Registrations')
+            if not SystemSetting.query.filter_by(key='maintenance_mode').first():
+                SystemSetting.set_val('maintenance_mode', 'false', 'Platform Maintenance Mode')
+
+            if AIProviderConfig.query.count() == 0:
+                # 1. Gemini
+                gemini_cfg = AIProviderConfig(
+                    provider_id='gemini',
+                    display_name='Google Gemini',
+                    is_enabled=True,
+                    is_primary=True,
+                    priority=1,
+                    model_name=os.getenv('GEMINI_MODEL', 'gemini-3.5-flash'),
+                    timeout_sec=12.0,
+                    last_status='untested'
+                )
+                if os.getenv('GEMINI_API_KEY'):
+                    gemini_cfg.set_api_key(os.getenv('GEMINI_API_KEY'))
+                db.session.add(gemini_cfg)
+
+                # 2. Groq
+                groq_cfg = AIProviderConfig(
+                    provider_id='groq',
+                    display_name='Groq API',
+                    is_enabled=bool(os.getenv('GROQ_API_KEY')),
+                    is_primary=False,
+                    priority=2,
+                    api_base_url='https://api.groq.com/openai/v1',
+                    model_name=os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b'),
+                    timeout_sec=15.0,
+                    last_status='untested'
+                )
+                if os.getenv('GROQ_API_KEY'):
+                    groq_cfg.set_api_key(os.getenv('GROQ_API_KEY'))
+                db.session.add(groq_cfg)
+
+                # 3. Ollama
+                ollama_cfg = AIProviderConfig(
+                    provider_id='ollama',
+                    display_name='Ollama (Local AI)',
+                    is_enabled=True,
+                    is_primary=False,
+                    priority=3,
+                    api_base_url=os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'),
+                    model_name=os.getenv('OLLAMA_MODEL', 'gemma3:1b'),
+                    timeout_sec=20.0,
+                    last_status='untested'
+                )
+                db.session.add(ollama_cfg)
+                db.session.commit()
+                ai_service.sync_from_db()
+        except Exception as e:
+            app.logger.debug(f"AIProviderConfig/SystemSetting init notice: {e}")
 
     login_manager = LoginManager()
     login_manager.login_view = 'auth.login'
@@ -106,6 +167,17 @@ def create_app(test_config=None):
         gemini_api_key = os.environ.get('GEMINI_API_KEY')
         ai_online = bool(gemini_api_key and len(gemini_api_key.strip()) > 5)
 
+        # Personalized time-of-day greeting using student profile
+        current_hour = datetime.now().hour
+        if current_hour < 12:
+            time_greeting = "Good morning"
+        elif current_hour < 17:
+            time_greeting = "Good afternoon"
+        else:
+            time_greeting = "Good evening"
+
+        greeting = f"{time_greeting}, {current_user.display_name}"
+
         return render_template(
             'index.html',
             total_subjects=total_subjects,
@@ -118,7 +190,9 @@ def create_app(test_config=None):
             upcoming_exams=upcoming_exams,
             today_schedule=today_schedule,
             ai_online=ai_online,
-            today=today
+            today=today,
+            time_greeting=time_greeting,
+            greeting=greeting
         )
 
     # API Endpoints for interactive dashboard actions
@@ -178,16 +252,20 @@ def create_app(test_config=None):
     def ai_chat():
         data = request.get_json() or {}
         user_message = data.get('message', '').strip()
+        subject_id = data.get('subject_id')
+        topic_id = data.get('topic_id')
 
         if not user_message:
             return jsonify({'reply': 'Please enter a valid study query.'})
 
         # Test compatibility & status check:
-        # If GEMINI_API_KEY is missing/empty and Ollama fallback is unreachable, honestly report offline
+        # If GEMINI_API_KEY is missing/empty, Groq is not configured, and Ollama is unreachable, honestly report offline
         gemini_api_key = os.environ.get('GEMINI_API_KEY')
         status = ai_service.get_provider_status()
         ollama_ready = status['fallback']['reachable'] and status['fallback']['model_ready']
-        if not gemini_api_key and not ollama_ready:
+        groq_ready = bool((status.get('groq') or {}).get('configured') and os.environ.get('GROQ_API_KEY'))
+
+        if not gemini_api_key and not ollama_ready and not groq_ready:
             return jsonify({
                 'reply': (
                     "⚠️ EduMate AI Service is currently offline. "
@@ -197,8 +275,42 @@ def create_app(test_config=None):
                 'online': False
             })
 
+        parsed_subject_id = None
+        if subject_id:
+            try:
+                parsed_subject_id = int(subject_id)
+            except (ValueError, TypeError):
+                parsed_subject_id = None
+
+        # Fetch recent conversation turns (up to 10 messages) for multi-turn context
+        past_msgs_query = ChatMessage.query.filter_by(user_id=current_user.id)
+        if parsed_subject_id:
+            past_msgs_query = past_msgs_query.filter(
+                (ChatMessage.subject_id == parsed_subject_id) | (ChatMessage.subject_id.is_(None))
+            )
+        past_msgs = past_msgs_query.order_by(ChatMessage.created_at.desc()).limit(10).all()
+        past_msgs.reverse()
+        chat_history = [{'role': m.role, 'content': m.content} for m in past_msgs if m.content]
+
+        # Save user query to chat history
+        try:
+            user_msg = ChatMessage(
+                user_id=current_user.id,
+                subject_id=parsed_subject_id,
+                role='user',
+                content=user_message
+            )
+            db.session.add(user_msg)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
         # Assemble student's approved syllabus context for grounded Q&A
-        user_subjects = Subject.query.filter_by(user_id=current_user.id).all()
+        if parsed_subject_id:
+            user_subjects = Subject.query.filter_by(id=parsed_subject_id, user_id=current_user.id).all()
+        else:
+            user_subjects = Subject.query.filter_by(user_id=current_user.id).all()
+
         syllabus_ctx = []
         for s in user_subjects:
             units_dict = {}
@@ -215,10 +327,39 @@ def create_app(test_config=None):
                 'units': [{'unit_title': u_k, 'topics': u_v} for u_k, u_v in units_dict.items()]
             })
 
+        selected_context = None
+        if topic_id:
+            try:
+                topic_obj = db.session.get(Topic, int(topic_id))
+                if topic_obj and topic_obj.subject.user_id == current_user.id:
+                    selected_context = {
+                        'subject_name': topic_obj.subject.name,
+                        'unit_name': topic_obj.unit_name or 'General',
+                        'topic_title': topic_obj.title
+                    }
+            except Exception:
+                pass
+        elif parsed_subject_id:
+            subj_obj = db.session.get(Subject, parsed_subject_id)
+            if subj_obj and subj_obj.user_id == current_user.id:
+                selected_context = {
+                    'subject_name': subj_obj.name,
+                    'unit_name': '',
+                    'topic_title': ''
+                }
+
+        # Include student's preferred explanation language from profile
+        if selected_context is None:
+            selected_context = {}
+        if current_user.profile and current_user.profile.preferred_language:
+            selected_context['preferred_language'] = current_user.profile.preferred_language
+
         try:
             res = ai_service.chat_study_assistant(
                 user_message=user_message,
-                approved_syllabus_context=syllabus_ctx
+                approved_syllabus_context=syllabus_ctx,
+                chat_history=chat_history,
+                selected_context=selected_context
             )
 
             if not res.get('success'):
@@ -231,6 +372,7 @@ def create_app(test_config=None):
             try:
                 chat_msg = ChatMessage(
                     user_id=current_user.id,
+                    subject_id=parsed_subject_id,
                     role='assistant',
                     content=res['reply'],
                     provider=res.get('provider'),
@@ -260,8 +402,11 @@ def create_app(test_config=None):
     @app.route('/api/ai/chat/history', methods=['GET'])
     @login_required
     def api_chat_history():
-        msgs = ChatMessage.query.filter_by(user_id=current_user.id).order_by(ChatMessage.created_at.desc()).limit(15).all()
-        msgs.reverse()
+        subject_id = request.args.get('subject_id', type=int)
+        query = ChatMessage.query.filter_by(user_id=current_user.id)
+        if subject_id:
+            query = query.filter((ChatMessage.subject_id == subject_id) | (ChatMessage.subject_id.is_(None)))
+        msgs = query.order_by(ChatMessage.created_at.asc()).limit(50).all()
         return jsonify({
             'success': True,
             'messages': [
@@ -270,27 +415,70 @@ def create_app(test_config=None):
                     'role': m.role,
                     'content': m.content,
                     'provider': m.provider,
+                    'model': m.model,
                     'source_pages': m.source_pages,
                     'created_at': m.created_at.strftime('%H:%M')
                 } for m in msgs
             ]
         })
 
+    @app.route('/api/ai/chat/clear', methods=['POST'])
+    @login_required
+    def api_clear_chat():
+        try:
+            ChatMessage.query.filter_by(user_id=current_user.id).delete()
+            db.session.commit()
+            return jsonify({'success': True, 'message': 'Chat history cleared successfully.'})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     @app.route('/api/ai/academic-content', methods=['POST'])
     @login_required
     def api_academic_content():
         """
         Module 6: Generates Notes, Summary, MCQs, Short Questions, or Long Questions
-        for a specific approved topic.
+        for a specific approved topic or a full subject.
         """
         data = request.get_json() or {}
         topic_id = data.get('topic_id')
+        subject_id = data.get('subject_id')
         content_type = data.get('content_type', 'notes')
 
-        if not topic_id:
-            return jsonify({'success': False, 'error': 'Topic ID is required.'}), 400
+        # Support for Full-Subject Quiz (all topics in subject)
+        if str(topic_id).lower() in ('all', 'subject_all', 'none') or not topic_id:
+            if not subject_id:
+                return jsonify({'success': False, 'error': 'Subject ID is required for full-subject assessment.'}), 400
+            subject = db.session.get(Subject, int(subject_id))
+            if not subject or subject.user_id != current_user.id:
+                return jsonify({'success': False, 'error': 'Subject not found or access denied.'}), 404
 
-        topic = db.session.get(Topic, int(topic_id))
+            if not subject.topics:
+                return jsonify({'success': False, 'error': 'No approved topics found in this subject.'}), 400
+
+            subtopics_list = [t.title for t in subject.topics[:8]]
+            try:
+                res = ai_service.generate_academic_content(
+                    content_type=content_type,
+                    topic_name=f"Comprehensive {subject.name} Assessment",
+                    unit_name="All Syllabus Units",
+                    subject_name=subject.name,
+                    subtopics=subtopics_list
+                )
+                if content_type == 'mcq':
+                    q_count = len(res.get('questions', []))
+                    session['active_quiz_start'] = datetime.now(timezone.utc).timestamp()
+                    session['active_quiz_deadline'] = session['active_quiz_start'] + (q_count * 60) + 60
+                return jsonify(res)
+            except Exception as e:
+                return jsonify({'success': False, 'error': f"Failed to generate assessment: {str(e)}"}), 500
+
+        try:
+            topic_id_int = int(topic_id)
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Invalid Topic ID provided.'}), 400
+
+        topic = db.session.get(Topic, topic_id_int)
         if not topic or topic.subject.user_id != current_user.id:
             return jsonify({'success': False, 'error': 'Topic not found or access denied.'}), 404
 
@@ -317,6 +505,10 @@ def create_app(test_config=None):
             elif content_type == 'summary' and res.get('content'):
                 topic.summary_content = res['content']
                 db.session.commit()
+            elif content_type == 'mcq':
+                q_count = len(res.get('questions', []))
+                session['active_quiz_start'] = datetime.now(timezone.utc).timestamp()
+                session['active_quiz_deadline'] = session['active_quiz_start'] + (q_count * 60) + 60
 
             return jsonify(res)
         except Exception as e:
@@ -327,6 +519,7 @@ def create_app(test_config=None):
     def api_submit_quiz():
         """
         Module 6: Scores student's submitted MCQ quiz, calculates actual percentage,
+        records correct/incorrect/unanswered breakdown, validates server deadline,
         saves results in QuizAttempt table, and returns explanations.
         """
         data = request.get_json() or {}
@@ -339,29 +532,55 @@ def create_app(test_config=None):
         if not questions:
             return jsonify({'success': False, 'error': 'No questions submitted.'}), 400
 
+        # Server-side timer deadline check
+        now_ts = datetime.now(timezone.utc).timestamp()
+        deadline = session.get('active_quiz_deadline')
+        # Allow 60 seconds grace period for network latency
+        is_timed_out = bool(deadline and now_ts > (deadline + 60))
+
         total = len(questions)
         score = 0
+        correct_count = 0
+        incorrect_count = 0
+        unanswered_count = 0
         scored_questions = []
 
         for idx, q in enumerate(questions):
             user_ans = user_answers[idx] if idx < len(user_answers) else None
             correct_ans = q.get('correct_answer')
-            is_correct = (user_ans == correct_ans)
-            if is_correct:
+            if user_ans is None or user_ans == -1:
+                is_correct = False
+                unanswered_count += 1
+            elif user_ans == correct_ans:
+                is_correct = True
                 score += 1
+                correct_count += 1
+            else:
+                is_correct = False
+                incorrect_count += 1
+
             scored_questions.append({
                 'question': q.get('question'),
                 'options': q.get('options', []),
                 'user_answer': user_ans,
                 'correct_answer': correct_ans,
                 'is_correct': is_correct,
+                'is_unanswered': (user_ans is None or user_ans == -1),
                 'explanation': q.get('explanation', '')
             })
 
+        parsed_topic_id = None
+        if topic_id and str(topic_id).isdigit():
+            parsed_topic_id = int(topic_id)
+
+        parsed_subject_id = None
+        if subject_id and str(subject_id).isdigit():
+            parsed_subject_id = int(subject_id)
+
         attempt = QuizAttempt(
             user_id=current_user.id,
-            subject_id=subject_id,
-            topic_id=topic_id,
+            subject_id=parsed_subject_id,
+            topic_id=parsed_topic_id,
             quiz_type='mcq',
             title=title,
             score=score,
@@ -371,12 +590,21 @@ def create_app(test_config=None):
         db.session.add(attempt)
         db.session.commit()
 
+        # Clear active quiz session
+        session.pop('active_quiz_start', None)
+        session.pop('active_quiz_deadline', None)
+
         percentage = int(round((score / total) * 100)) if total > 0 else 0
         return jsonify({
             'success': True,
             'score': score,
             'total_questions': total,
+            'correct_count': correct_count,
+            'incorrect_count': incorrect_count,
+            'unanswered_count': unanswered_count,
             'percentage': percentage,
+            'accuracy_percentage': percentage,
+            'is_timed_out': is_timed_out,
             'attempt_id': attempt.id,
             'results': scored_questions
         })
@@ -883,10 +1111,195 @@ def create_app(test_config=None):
         subjects = Subject.query.filter_by(user_id=current_user.id).all()
         return render_template('progress.html', subjects=subjects)
 
+    @app.route('/profile', methods=['GET', 'POST'])
+    @login_required
+    def profile_view():
+        target_user_id = request.args.get('user_id', type=int)
+        if target_user_id and target_user_id != current_user.id:
+            # Security: Students cannot inspect or modify another student's profile
+            if not current_user.is_admin:
+                abort(403)
+            target_user = db.session.get(User, target_user_id)
+            if not target_user:
+                abort(404)
+        else:
+            target_user = current_user
+
+        profile = target_user.get_or_create_profile()
+
+        if request.method == 'POST':
+            # 1. Profile Photo upload handling with file type and size validation
+            if 'avatar' in request.files:
+                file = request.files['avatar']
+                if file and file.filename:
+                    filename = file.filename
+                    if '.' in filename:
+                        ext = filename.rsplit('.', 1)[1].lower()
+                        allowed_exts = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
+                        if ext not in allowed_exts:
+                            flash('Invalid photo format. Permitted file types: JPG, PNG, WEBP, GIF.', 'danger')
+                            return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+
+                        # Validate file size (<= 2 MB)
+                        file.seek(0, os.SEEK_END)
+                        size_bytes = file.tell()
+                        file.seek(0)
+                        if size_bytes > 2 * 1024 * 1024:
+                            flash('Profile photo exceeds 2 MB limit. Please upload a smaller image.', 'danger')
+                            return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+
+                        upload_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'avatars')
+                        os.makedirs(upload_dir, exist_ok=True)
+                        safe_filename = f"avatar_u{target_user.id}_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:6]}.{ext}"
+                        file.save(os.path.join(upload_dir, safe_filename))
+                        profile.avatar_url = f"/static/uploads/avatars/{safe_filename}"
+                    else:
+                        flash('Invalid image filename.', 'danger')
+                        return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+
+            # 2. Personal Information
+            full_name = request.form.get('full_name', '').strip()
+            username = request.form.get('username', '').strip()
+            email = request.form.get('email', '').strip().lower()
+            phone_number = request.form.get('phone_number', '').strip()
+
+            if not full_name:
+                flash('Full Name is required.', 'danger')
+                return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+
+            if not username:
+                flash('Username is required.', 'danger')
+                return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+
+            if len(username) < 3:
+                flash('Username must be at least 3 characters.', 'danger')
+                return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+
+            if not re.match(r'^[a-zA-Z0-9_.-]+$', username):
+                flash('Username may only contain letters, numbers, periods, hyphens, and underscores.', 'danger')
+                return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+
+            # Check if username changed and uniqueness
+            if username.lower() != target_user.username.lower():
+                RESERVED_USERNAMES = {'admin', 'administrator', 'root', 'system', 'superuser', 'demo_admin', 'test_admin', 'edumate_admin', 'manager', 'staff'}
+                if username.lower() in RESERVED_USERNAMES:
+                    flash(f"Username '{username}' is reserved.", 'danger')
+                    return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+                if User.query.filter(User.id != target_user.id, db.func.lower(User.username) == username.lower()).first():
+                    flash('This username is already taken by another account.', 'danger')
+                    return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+                target_user.username = username
+
+            # Check if email changed and uniqueness
+            EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')
+            if not email or not EMAIL_REGEX.match(email):
+                flash('Please enter a valid email address.', 'danger')
+                return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+
+            if email.lower() != target_user.email.lower():
+                if User.query.filter(User.id != target_user.id, db.func.lower(User.email) == email.lower()).first():
+                    flash('This email address is already in use by another account.', 'danger')
+                    return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+                target_user.email = email
+
+            profile.full_name = full_name
+            profile.phone_number = phone_number
+
+            # 3. Academic Information
+            profile.college_name = request.form.get('college_name', '').strip()
+            profile.university_name = request.form.get('university_name', '').strip()
+            profile.degree_course = request.form.get('degree_course', '').strip()
+            profile.branch_department = request.form.get('branch_department', '').strip()
+            profile.current_semester = request.form.get('current_semester', '').strip()
+            profile.academic_session = request.form.get('academic_session', '').strip()
+            profile.roll_number = request.form.get('roll_number', '').strip()
+
+            # 4. Study Preferences
+            try:
+                hours_raw = request.form.get('daily_study_hours', '3.0')
+                profile.daily_study_hours = max(0.5, min(16.0, float(hours_raw)))
+            except (ValueError, TypeError):
+                profile.daily_study_hours = 3.0
+
+            pref_time = request.form.get('preferred_study_time', 'Evening').strip()
+            profile.preferred_study_time = pref_time if pref_time in ('Early Morning', 'Morning', 'Afternoon', 'Evening', 'Night') else 'Evening'
+
+            pref_lang = request.form.get('preferred_language', 'English').strip()
+            profile.preferred_language = pref_lang if pref_lang in ('English', 'Hindi', 'Hinglish') else 'English'
+
+            profile.target_exam = request.form.get('target_exam', '').strip()
+
+            db.session.commit()
+            flash('Your profile and study preferences have been updated successfully!', 'success')
+            return redirect(url_for('profile_view', user_id=target_user.id if target_user != current_user else None))
+
+        return render_template(
+            'profile.html',
+            user=target_user,
+            profile=profile,
+            is_own_profile=(target_user.id == current_user.id)
+        )
+
     @app.route('/settings')
     @login_required
     def settings_view():
         return render_template('settings.html')
+
+    @app.route('/ai-assistant')
+    @login_required
+    def ai_assistant_view():
+        subjects = Subject.query.filter_by(user_id=current_user.id).all()
+        status = ai_service.get_provider_status()
+        recent_messages = ChatMessage.query.filter_by(user_id=current_user.id).order_by(ChatMessage.created_at.asc()).limit(50).all()
+        return render_template(
+            'ai_assistant.html',
+            subjects=subjects,
+            status=status,
+            messages=recent_messages
+        )
+
+    @app.route('/api/subjects/<int:subject_id>/syllabus', methods=['GET'])
+    @login_required
+    def api_subject_syllabus(subject_id):
+        subject = db.session.get(Subject, subject_id)
+        if not subject or subject.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Subject not found or access denied.'}), 404
+
+        units_dict = {}
+        for t in subject.topics:
+            u_name = t.unit_name or "General Curriculum"
+            if u_name not in units_dict:
+                units_dict[u_name] = []
+
+            subtopics = []
+            if t.subtopics:
+                try:
+                    subtopics = json.loads(t.subtopics) if isinstance(t.subtopics, str) else t.subtopics
+                except Exception:
+                    subtopics = []
+
+            units_dict[u_name].append({
+                'id': t.id,
+                'title': t.title,
+                'subtopics': subtopics,
+                'is_completed': bool(t.is_completed),
+                'status': t.status or ('completed' if t.is_completed else 'pending'),
+                'source_pages': t.source_pages
+            })
+
+        units_list = [{'unit_name': k, 'topics': v} for k, v in units_dict.items()]
+
+        return jsonify({
+            'success': True,
+            'subject': {
+                'id': subject.id,
+                'name': subject.name,
+                'code': subject.code,
+                'color': subject.color,
+                'total_topics': len(subject.topics),
+                'units': units_list
+            }
+        })
 
     # Study Roadmap Routes
     @app.route('/roadmap')
@@ -969,7 +1382,10 @@ def create_app(test_config=None):
     def generate_roadmap():
         subject_id = request.form.get('subject_id', type=int)
         exam_date_str = request.form.get('exam_date', '').strip()
-        daily_hours = request.form.get('daily_hours', type=float, default=2.0)
+        user_pref_hours = 2.0
+        if current_user.is_authenticated and current_user.profile and current_user.profile.daily_study_hours:
+            user_pref_hours = float(current_user.profile.daily_study_hours)
+        daily_hours = request.form.get('daily_hours', type=float, default=user_pref_hours)
         syllabus_text = request.form.get('syllabus_text', '').strip()
         custom_title = request.form.get('title', '').strip()
         reset_existing = request.form.get('reset_existing') == 'true'
@@ -998,8 +1414,26 @@ def create_app(test_config=None):
             return redirect(url_for('roadmap_view'))
 
         # Validation 3: Syllabus parsing & formatting for AI study roadmap
+        selected_topic_ids = request.form.getlist('topic_ids')
+        if not selected_topic_ids and request.form.get('selected_topic_ids'):
+            try:
+                selected_topic_ids = json.loads(request.form.get('selected_topic_ids'))
+            except Exception:
+                selected_topic_ids = [x.strip() for x in request.form.get('selected_topic_ids').split(',') if x.strip()]
+
         topics_input = []
-        if syllabus_text:
+        if selected_topic_ids:
+            int_ids = [int(x) for x in selected_topic_ids if str(x).isdigit()]
+            chosen_topics = Topic.query.filter(Topic.id.in_(int_ids), Topic.subject_id == subject.id).all()
+            for idx, t in enumerate(chosen_topics):
+                u_name = t.unit_name or f"Unit {idx // 3 + 1}"
+                topics_input.append({
+                    "topic_id": t.id,
+                    "unit_name": u_name,
+                    "topic_title": t.title,
+                    "is_completed": t.is_completed
+                })
+        elif syllabus_text:
             parsed_tuples = parse_syllabus_topics(syllabus_text)
             topics_input = [{"unit_name": u, "topic_title": t, "is_completed": False} for u, t in parsed_tuples]
         else:
@@ -1007,6 +1441,7 @@ def create_app(test_config=None):
                 for idx, t in enumerate(subject.topics):
                     u_name = t.unit_name or f"Unit {idx // 3 + 1}"
                     topics_input.append({
+                        "topic_id": t.id,
                         "unit_name": u_name,
                         "topic_title": t.title,
                         "is_completed": t.is_completed
@@ -1016,7 +1451,7 @@ def create_app(test_config=None):
                 return redirect(url_for('roadmap_view'))
 
         if not topics_input:
-            flash('Could not identify topics in the provided syllabus. Please enter one topic per line.', 'danger')
+            flash('Could not identify topics in the provided syllabus. Please select at least one topic or enter syllabus topics.', 'danger')
             return redirect(url_for('roadmap_view'))
 
         # Generate intelligent balanced schedule via AI roadmap algorithm

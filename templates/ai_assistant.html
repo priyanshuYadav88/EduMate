@@ -1,0 +1,674 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Study Assistant — EduMate{% endblock %}
+
+{% block content %}
+<div class="assistant-container">
+    <!-- Page Header & Provider Status -->
+    <div class="assistant-page-header">
+        <div class="assistant-header-left">
+            <div class="assistant-robot-badge">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="10" rx="2"/>
+                    <circle cx="12" cy="5" r="2"/>
+                    <path d="M12 7v4"/>
+                    <line x1="8" y1="16" x2="8" y2="16"/>
+                    <line x1="16" y1="16" x2="16" y2="16"/>
+                </svg>
+            </div>
+            <div class="assistant-header-info">
+                <h1>
+                    <span>AI Study Assistant</span>
+                    <span class="ai-powered-badge">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="#7c3aed" stroke="#7c3aed" stroke-width="1"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        <span>Powered by {% if status.primary and status.primary.enabled and status.primary.configured %}Gemini{% elif status.groq and status.groq.enabled and status.groq.configured %}Groq{% elif status.fallback and status.fallback.reachable %}Ollama{% else %}AI{% endif %}</span>
+                    </span>
+                </h1>
+                <p class="assistant-header-subtitle">Your personal academic companion for explanations, notes, examples and practice questions.</p>
+            </div>
+        </div>
+
+        <div class="assistant-header-actions">
+            <!-- Clear Chat Button -->
+            <button type="button" class="header-pill-btn" onclick="confirmClearChat()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <span>Clear Chat</span>
+            </button>
+            <!-- Chat History Button -->
+            <button type="button" class="header-pill-btn" onclick="openChatHistoryModal()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>Chat History</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Two-Column Workspace -->
+    <div class="assistant-workspace-grid">
+        <!-- Left Column: Study Context & Quick Study Actions -->
+        <div class="assistant-sidebar-cards">
+            <!-- Card 1: Study Context -->
+            <div class="assistant-context-card">
+                <div class="context-card-header">
+                    <div class="context-icon-wrap">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                            <polyline points="2 17 12 22 22 17"/>
+                            <polyline points="2 12 12 17 22 12"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="context-card-title">Study Context</h3>
+                        <p class="context-card-desc">Select your subject and topic for more accurate, syllabus-based answers.</p>
+                    </div>
+                </div>
+
+                <!-- Subject Selector -->
+                <label class="custom-select-label" for="assistantSubjectSelect">Subject</label>
+                <div class="custom-select-wrap">
+                    <span class="custom-select-icon">📖</span>
+                    <select id="assistantSubjectSelect" class="custom-select-elem" onchange="handleSubjectChange()">
+                        <option value="">Select Enrolled Subject</option>
+                        {% for subj in subjects %}
+                        <option value="{{ subj.id }}" data-name="{{ subj.name }}" data-code="{{ subj.code }}">{{ subj.name }} ({{ subj.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Topic Selector -->
+                <label class="custom-select-label" for="assistantTopicSelect">Topic</label>
+                <div class="custom-select-wrap">
+                    <span class="custom-select-icon" style="font-weight: 700; font-family: monospace;">&lt;/&gt;</span>
+                    <select id="assistantTopicSelect" class="custom-select-elem" onchange="handleTopicChange()">
+                        <option value="">Select Topic / General</option>
+                    </select>
+                </div>
+
+                <!-- Apply Context Button -->
+                <button type="button" class="btn-apply-context" onclick="handleApplyContext()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                    <span id="applyContextBtnText">Apply Context</span>
+                </button>
+            </div>
+
+            <!-- Card 2: Quick Study Actions -->
+            <div class="assistant-actions-card">
+                <div class="actions-card-header">
+                    <div class="actions-icon-wrap">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="#7c3aed" stroke="#7c3aed" stroke-width="1">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="actions-card-title">Quick Study Actions</h3>
+                        <p class="actions-card-desc">One-click academic help for your topic</p>
+                    </div>
+                </div>
+
+                <div class="actions-grid-2col">
+                    <button type="button" class="quick-action-pill" onclick="triggerQuickAction('explain')">
+                        <span>💡</span>
+                        <span>Explain Topic</span>
+                    </button>
+                    <button type="button" class="quick-action-pill" onclick="triggerQuickAction('notes')" title="Generate Short Notes">
+                        <span>📝</span>
+                        <span>Short Notes</span>
+                        <span style="display:none;">Generate Short Notes</span>
+                    </button>
+                    <button type="button" class="quick-action-pill" onclick="triggerQuickAction('examples')">
+                        <span>📘</span>
+                        <span>Examples</span>
+                    </button>
+                    <button type="button" class="quick-action-pill" onclick="triggerQuickAction('questions')">
+                        <span>❓</span>
+                        <span>Practice Questions</span>
+                    </button>
+                    <button type="button" class="quick-action-pill" onclick="triggerQuickAction('revision')">
+                        <span>🎯</span>
+                        <span>Quick Revision</span>
+                    </button>
+                    <button type="button" class="quick-action-pill" onclick="triggerQuickAction('summarize')">
+                        <span>📊</span>
+                        <span>Summarize</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: AI Conversation Container -->
+        <div class="assistant-chat-card">
+            <!-- Messages Container -->
+            <div id="chatMessagesContainer" class="assistant-messages-body">
+                {% if not messages %}
+                <!-- Initial Welcome Message structured like reference UI -->
+                <div class="chat-assistant-row">
+                    <div class="robot-avatar-square">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+                    </div>
+                    <div class="ai-response-card">
+                        <h3 class="ai-topic-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                            <span>Welcome to EduMate AI Study Assistant</span>
+                        </h3>
+                        <p class="ai-para">Ask any conceptual study question, request algorithmic breakdowns, practice code examples, or select a subject and topic on the left to ground your answers in your course syllabus.</p>
+                        <div class="ai-section-banner">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                            <span>How To Get Started</span>
+                        </div>
+                        <div class="ai-steps-container">
+                            <div class="ai-step-row"><span class="ai-step-badge">1</span><div class="ai-step-text">Select your <strong>Subject</strong> and <strong>Topic</strong> on the left, then click <strong>Apply Context</strong>.</div></div>
+                            <div class="ai-step-row"><span class="ai-step-badge">2</span><div class="ai-step-text">Click any of the <strong>Quick Study Actions</strong> (e.g. <em>Explain Topic</em> or <em>Examples</em>).</div></div>
+                            <div class="ai-step-row"><span class="ai-step-badge">3</span><div class="ai-step-text">Ask questions freely in <strong>English</strong>, <strong>Hindi</strong>, or <strong>Hinglish</strong>!</div></div>
+                        </div>
+                        <div class="ai-response-footer">
+                            <div class="ai-footer-actions">
+                                <button type="button" class="ai-action-btn" onclick="copyResponseText(this)">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                    <span>Copy Response</span>
+                                </button>
+                                <button type="button" class="ai-action-btn action-btn-like" onclick="toggleLike(this)">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                                    <span>Like</span>
+                                </button>
+                                <button type="button" class="ai-action-btn action-btn-dislike" onclick="toggleDislike(this)">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+                                    <span>Dislike</span>
+                                </button>
+                            </div>
+                            <span class="chat-timestamp" style="margin-right: 0;">Ready</span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Existing messages from database -->
+                {% for msg in messages %}
+                    {% if msg.role == 'user' %}
+                    <div class="chat-user-row">
+                        <div class="chat-user-flex">
+                            <div class="chat-bubble-user-styled">{{ msg.content }}</div>
+                            <div class="user-avatar-circle">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            </div>
+                        </div>
+                        <div class="chat-timestamp">{{ msg.created_at.strftime('%I:%M %p') }}</div>
+                    </div>
+                    {% else %}
+                    <div class="chat-assistant-row">
+                        <div class="robot-avatar-square">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+                        </div>
+                        <div class="ai-response-card">
+                            <div class="ai-msg-body ai-markdown-content">
+                                <textarea class="raw-markdown-source" style="display:none;" aria-hidden="true">{{ msg.content }}</textarea>
+                                <div class="markdown-rendered-body"></div>
+                            </div>
+                            <div class="ai-response-footer">
+                                <div class="ai-footer-actions">
+                                    <button type="button" class="ai-action-btn" onclick="copyResponseText(this)">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                        <span>Copy Response</span>
+                                    </button>
+                                    <button type="button" class="ai-action-btn action-btn-like" onclick="toggleLike(this)">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                                        <span>Like</span>
+                                    </button>
+                                    <button type="button" class="ai-action-btn action-btn-dislike" onclick="toggleDislike(this)">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+                                        <span>Dislike</span>
+                                    </button>
+                                </div>
+                                <span class="chat-timestamp" style="margin-right: 0;">{{ msg.created_at.strftime('%I:%M %p') }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <!-- Thinking Indicator -->
+            <div id="aiThinkingIndicator" style="display: none; padding: 10px 24px; background: #ffffff; border-top: 1px solid #f1f5f9; align-items: center; gap: 10px;">
+                <div style="width: 18px; height: 18px; border: 2.5px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.7s linear infinite;"></div>
+                <span style="font-size: 12.5px; color: #475569; font-weight: 500;">EduMate AI is thinking and formulating response...</span>
+            </div>
+
+            <!-- Error Banner -->
+            <div id="aiErrorBanner" style="display: none; padding: 10px 24px; background: #fef2f2; border-top: 1px solid #fecaca; color: #991b1b; font-size: 12.5px; align-items: center; justify-content: space-between;">
+                <span id="aiErrorMessage">AI service encountered an issue.</span>
+                <button type="button" class="header-pill-btn" onclick="document.getElementById('aiErrorBanner').style.display='none'" style="padding: 2px 10px; font-size: 11px;">Dismiss</button>
+            </div>
+
+            <!-- Capsule Input Footer -->
+            <div class="assistant-input-footer">
+                <form id="aiChatForm" onsubmit="handleChatSubmit(event)">
+                    <div class="input-capsule-wrapper">
+                        <span class="input-attachment-icon" title="Subject Context Reference" onclick="document.getElementById('assistantSubjectSelect').focus()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        </span>
+                        <input type="text" id="aiMessageInput" class="input-capsule-field" placeholder="Ask a study question, request notes, examples or practice questions..." autocomplete="off">
+                        <button type="submit" id="aiSendBtn" class="btn-capsule-send">
+                            <span>Send</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clear Chat Confirmation Modal -->
+<div class="modal-overlay" id="clearChatModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 1050; align-items: center; justify-content: center; padding: 16px;">
+    <div class="modal-card card" style="max-width: 440px; width: 100%; padding: 24px; border-radius: 16px;">
+        <h3 class="card-title" style="margin-top: 0; font-size: 16.5px; color: #0f172a;">Clear Chat History?</h3>
+        <p style="font-size: 13px; color: #64748b; margin: 10px 0 20px 0; line-height: 1.5;">
+            This will permanently remove your conversation history with EduMate AI. This action cannot be undone.
+        </p>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="header-pill-btn" onclick="closeClearModal()">Cancel</button>
+            <button type="button" class="btn btn-danger" style="border-radius: 20px; padding: 8px 18px;" onclick="executeClearChat()">Yes, Clear Chat</button>
+        </div>
+    </div>
+</div>
+
+<!-- Chat History Drawer/Modal -->
+<div class="modal-overlay" id="chatHistoryModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 1050; align-items: center; justify-content: center; padding: 16px;">
+    <div class="modal-card card" style="max-width: 540px; width: 100%; padding: 24px; border-radius: 16px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
+            <h3 class="card-title" style="margin: 0; font-size: 16px; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>Recent Conversation History</span>
+            </h3>
+            <button type="button" class="header-pill-btn" onclick="closeChatHistoryModal()" style="padding: 4px 10px; font-size: 16px; line-height: 1;">&times;</button>
+        </div>
+        <div id="historyModalBody" class="chat-history-list">
+            <div style="text-align: center; color: #94a3b8; padding: 20px;">Loading history...</div>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentSubjectTopics = {};
+let isSubmitting = false;
+
+// Subject topics cache from server
+const subjectData = {
+    {% for subj in subjects %}
+    {{ subj.id }}: [
+        {% for t in subj.topics %}
+        {id: {{ t.id }}, title: {{ t.title|tojson }}, unit: {{ (t.unit_name or 'General')|tojson }}},
+        {% endfor %}
+    ],
+    {% endfor %}
+};
+
+function scrollToBottom() {
+    const container = document.getElementById('chatMessagesContainer');
+    if (container) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+// Unified client-side markdown rendering for existing database messages
+function renderAllSavedMessages() {
+    document.querySelectorAll('.ai-msg-body').forEach(el => {
+        const rawEl = el.querySelector('.raw-markdown-source');
+        const target = el.querySelector('.markdown-rendered-body') || el;
+        if (rawEl) {
+            const rawText = rawEl.value !== undefined ? rawEl.value : (rawEl.textContent || '');
+            if (rawText && typeof renderMarkdown === 'function') {
+                target.innerHTML = renderMarkdown(rawText);
+            }
+        } else if (el.hasAttribute('data-raw')) {
+            try {
+                const raw = JSON.parse(el.getAttribute('data-raw'));
+                if (raw && typeof renderMarkdown === 'function') {
+                    target.innerHTML = renderMarkdown(raw);
+                }
+            } catch (e) {
+                const fallbackRaw = el.getAttribute('data-raw') || el.textContent;
+                if (fallbackRaw && typeof renderMarkdown === 'function') {
+                    target.innerHTML = renderMarkdown(fallbackRaw);
+                }
+            }
+        }
+    });
+}
+
+// Render on script execution and on DOMContentLoaded
+renderAllSavedMessages();
+window.addEventListener('DOMContentLoaded', () => {
+    renderAllSavedMessages();
+    scrollToBottom();
+});
+
+function handleSubjectChange() {
+    const subjSelect = document.getElementById('assistantSubjectSelect');
+    const topicSelect = document.getElementById('assistantTopicSelect');
+    const subjId = subjSelect.value;
+
+    topicSelect.innerHTML = '<option value="">Select Topic / General</option>';
+
+    if (subjId && subjectData[subjId]) {
+        const topics = subjectData[subjId];
+        topics.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = `${t.title}`;
+            opt.setAttribute('data-topic-title', t.title);
+            opt.setAttribute('data-unit-name', t.unit);
+            topicSelect.appendChild(opt);
+        });
+    }
+}
+
+function handleTopicChange() {
+    // Topic change handler
+}
+
+function handleApplyContext() {
+    const subjSelect = document.getElementById('assistantSubjectSelect');
+    const topicSelect = document.getElementById('assistantTopicSelect');
+    const btn = document.querySelector('.btn-apply-context');
+    const btnText = document.getElementById('applyContextBtnText');
+
+    const subjName = subjSelect.options[subjSelect.selectedIndex]?.text || '';
+    const topicName = topicSelect.options[topicSelect.selectedIndex]?.getAttribute('data-topic-title') || topicSelect.options[topicSelect.selectedIndex]?.text || '';
+
+    if (!subjSelect.value) {
+        alert("Please select a subject first to apply context.");
+        return;
+    }
+
+    // Visual confirmation on button
+    const origHtml = btnText.innerHTML;
+    btnText.textContent = "Context Applied ✓";
+    btn.style.background = "linear-gradient(135deg, #16a34a, #22c55e)";
+
+    setTimeout(() => {
+        btnText.innerHTML = origHtml;
+        btn.style.background = "linear-gradient(135deg, #2563eb 0%, #6366f1 100%)";
+    }, 2200);
+
+    const input = document.getElementById('aiMessageInput');
+    if (topicSelect.value) {
+        input.placeholder = `Ask anything about "${topicName}" (${subjName})...`;
+    } else {
+        input.placeholder = `Ask anything about ${subjName}...`;
+    }
+    input.focus();
+}
+
+function triggerQuickAction(actionType) {
+    if (isSubmitting) return;
+
+    const subjSelect = document.getElementById('assistantSubjectSelect');
+    const topicSelect = document.getElementById('assistantTopicSelect');
+    const subjText = subjSelect.options[subjSelect.selectedIndex]?.text || '';
+    const topicText = topicSelect.options[topicSelect.selectedIndex]?.getAttribute('data-topic-title') || topicSelect.options[topicSelect.selectedIndex]?.text || '';
+
+    let prompt = '';
+    const hasTopic = topicSelect.value && topicSelect.value !== '';
+    const targetName = hasTopic ? `${topicText}` : (subjSelect.value ? `topics in ${subjText}` : 'Merge Sort');
+
+    switch (actionType) {
+        case 'explain':
+            prompt = `Explain ${targetName} with algorithm, example and time complexity.`;
+            break;
+        case 'notes':
+            prompt = `Generate high-yield short revision notes for ${targetName} with key principles and formulas.`;
+            break;
+        case 'examples':
+            prompt = `Provide concrete, step-by-step practical examples for ${targetName}.`;
+            break;
+        case 'questions':
+            prompt = `Give me 3-4 high-probability examination practice questions on ${targetName} with brief hints.`;
+            break;
+        case 'revision':
+            prompt = `Give me a fast 2-minute quick revision summary cheat-sheet for ${targetName}.`;
+            break;
+        case 'summarize':
+            prompt = `Summarize the essential concepts and core takeaways of ${targetName} concisely.`;
+            break;
+    }
+
+    const input = document.getElementById('aiMessageInput');
+    input.value = prompt;
+    sendChatMessage(prompt);
+}
+
+async function handleChatSubmit(e) {
+    if (e) e.preventDefault();
+    if (isSubmitting) return;
+
+    const input = document.getElementById('aiMessageInput');
+    const msg = (input.value || '').trim();
+    if (!msg) return;
+
+    input.value = '';
+    await sendChatMessage(msg);
+}
+
+async function sendChatMessage(messageText) {
+    if (isSubmitting) return;
+    isSubmitting = true;
+
+    const container = document.getElementById('chatMessagesContainer');
+    const thinking = document.getElementById('aiThinkingIndicator');
+    const errorBanner = document.getElementById('aiErrorBanner');
+    const sendBtn = document.getElementById('aiSendBtn');
+    const input = document.getElementById('aiMessageInput');
+
+    const subjId = document.getElementById('assistantSubjectSelect').value || null;
+    const topicId = document.getElementById('assistantTopicSelect').value || null;
+
+    // Append User Message to UI matching reference styling
+    const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    const userRow = document.createElement('div');
+    userRow.className = 'chat-user-row';
+    userRow.innerHTML = `
+        <div class="chat-user-flex">
+            <div class="chat-bubble-user-styled">${escapeHtml(messageText)}</div>
+            <div class="user-avatar-circle">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+        </div>
+        <div class="chat-timestamp">${timeStr}</div>
+    `;
+    container.appendChild(userRow);
+    scrollToBottom();
+
+    // UI state
+    thinking.style.display = 'flex';
+    errorBanner.style.display = 'none';
+    sendBtn.disabled = true;
+    input.disabled = true;
+
+    try {
+        const response = await fetch('/api/ai/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message: messageText,
+                subject_id: subjId,
+                topic_id: topicId
+            })
+        });
+
+        const data = await response.json();
+        const replyRaw = data.reply || '';
+        const replyHtml = typeof renderMarkdown === 'function' ? renderMarkdown(replyRaw) : escapeHtml(replyRaw || 'No response generated.');
+
+        // Append Assistant Message to UI using the exact same structure as database messages
+        const assistantRow = document.createElement('div');
+        assistantRow.className = 'chat-assistant-row';
+        assistantRow.innerHTML = `
+            <div class="robot-avatar-square">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+            </div>
+            <div class="ai-response-card">
+                <div class="ai-msg-body ai-markdown-content">
+                    <textarea class="raw-markdown-source" style="display:none;" aria-hidden="true">${escapeHtml(replyRaw)}</textarea>
+                    <div class="markdown-rendered-body">${replyHtml}</div>
+                </div>
+                <div class="ai-response-footer">
+                    <div class="ai-footer-actions">
+                        <button type="button" class="ai-action-btn" onclick="copyResponseText(this)">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            <span>Copy Response</span>
+                        </button>
+                        <button type="button" class="ai-action-btn action-btn-like" onclick="toggleLike(this)">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                            <span>Like</span>
+                        </button>
+                        <button type="button" class="ai-action-btn action-btn-dislike" onclick="toggleDislike(this)">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+                            <span>Dislike</span>
+                        </button>
+                    </div>
+                    <span class="chat-timestamp" style="margin-right: 0;">${timeStr}</span>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(assistantRow);
+        scrollToBottom();
+
+        if (data.online === false) {
+            document.getElementById('aiErrorMessage').textContent = data.reply || "AI service is offline.";
+            errorBanner.style.display = 'flex';
+        }
+    } catch (err) {
+        document.getElementById('aiErrorMessage').textContent = "Failed to communicate with AI service: " + err.message;
+        errorBanner.style.display = 'flex';
+    } finally {
+        thinking.style.display = 'none';
+        isSubmitting = false;
+        sendBtn.disabled = false;
+        input.disabled = false;
+        input.focus();
+    }
+}
+
+function confirmClearChat() {
+    document.getElementById('clearChatModal').style.display = 'flex';
+}
+
+function closeClearModal() {
+    document.getElementById('clearChatModal').style.display = 'none';
+}
+
+async function executeClearChat() {
+    closeClearModal();
+    try {
+        const res = await fetch('/api/ai/chat/clear', {method: 'POST'});
+        const data = await res.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.error || "Failed to clear chat history.");
+        }
+    } catch (e) {
+        alert("Network error while clearing chat: " + e.message);
+    }
+}
+
+// Chat History Modal controls
+async function openChatHistoryModal() {
+    const modal = document.getElementById('chatHistoryModal');
+    const body = document.getElementById('historyModalBody');
+    modal.style.display = 'flex';
+    body.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 20px;">Loading history...</div>';
+
+    try {
+        const res = await fetch('/api/ai/chat/history');
+        const data = await res.json();
+        if (data.success && data.messages && data.messages.length > 0) {
+            body.innerHTML = '';
+
+            // Group into conversation pairs: user question -> assistant answer
+            const pairs = [];
+            const msgs = data.messages;
+            for (let i = 0; i < msgs.length; i++) {
+                if (msgs[i].role === 'user') {
+                    let ans = null;
+                    if (i + 1 < msgs.length && msgs[i + 1].role === 'assistant') {
+                        ans = msgs[i + 1];
+                    }
+                    pairs.push({ question: msgs[i], answer: ans });
+                }
+            }
+
+            if (pairs.length === 0) {
+                body.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 20px;">No recent questions found.</div>';
+                return;
+            }
+
+            pairs.reverse().forEach(pair => {
+                const item = document.createElement('div');
+                item.className = 'chat-history-item';
+                item.style.marginBottom = '12px';
+                item.style.padding = '12px 14px';
+                item.style.borderRadius = '12px';
+                item.style.border = '1px solid #e2e8f0';
+                item.style.backgroundColor = '#ffffff';
+
+                const qText = pair.question.content || '';
+                const aContent = pair.answer ? pair.answer.content : '';
+                const renderedAnswer = aContent && typeof renderMarkdown === 'function' ? renderMarkdown(aContent) : '';
+
+                item.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                        <div style="font-size: 13.5px; font-weight: 600; color: #0f172a; line-height: 1.4;">${escapeHtml(qText)}</div>
+                        <span style="font-size: 11px; color: #94a3b8; white-space: nowrap;">${escapeHtml(pair.question.created_at)}</span>
+                    </div>
+                    ${renderedAnswer ? `
+                    <div class="history-answer-wrapper" style="margin-top: 8px; max-height: 180px; overflow-y: auto; padding: 10px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12.5px;">
+                        <div class="ai-msg-body ai-markdown-content">${renderedAnswer}</div>
+                    </div>` : ''}
+                    <div style="margin-top: 10px; display: flex; gap: 8px; justify-content: flex-end;">
+                        <button type="button" class="header-pill-btn btn-history-use" style="padding: 4px 12px; font-size: 11.5px; font-weight: 600; color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe;">Use in Chat</button>
+                    </div>
+                `;
+
+                const useBtn = item.querySelector('.btn-history-use');
+                if (useBtn) {
+                    useBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        closeChatHistoryModal();
+                        const input = document.getElementById('aiMessageInput');
+                        input.value = qText;
+                        input.focus();
+                    });
+                }
+
+                body.appendChild(item);
+            });
+        } else {
+            body.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 20px;">No recent conversations found.</div>';
+        }
+    } catch (err) {
+        body.innerHTML = `<div style="text-align: center; color: #ef4444; padding: 20px;">Failed to load history: ${escapeHtml(err.message)}</div>`;
+    }
+}
+
+function closeChatHistoryModal() {
+    document.getElementById('chatHistoryModal').style.display = 'none';
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.innerText = str;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

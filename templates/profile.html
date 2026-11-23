@@ -1,0 +1,469 @@
+{% extends 'base.html' %}
+
+{% block title %}Student Profile — EduMate{% endblock %}
+
+{% block content %}
+<div class="content-container profile-mockup-container">
+    <!-- Top Header: Title, Completion Status Pill & Edit Profile Action -->
+    <div class="profile-mockup-header-row">
+        <div>
+            <h1 class="profile-mockup-title">Student Profile</h1>
+            <p class="profile-mockup-subtitle">Manage your personal, academic and study preferences.</p>
+        </div>
+
+        <div class="profile-mockup-actions">
+            <!-- Green Status Badge -->
+            <div class="profile-completion-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Profile: {{ profile.completion_percentage }}% Complete</span>
+            </div>
+
+            <!-- Edit / Save Profile Toggle Button -->
+            <button type="button" class="btn btn-mockup-edit" id="btnToggleEditProfile" onclick="toggleEditProfileMode()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                <span id="btnEditText">Edit Profile</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Hidden Avatar Upload Form (Auto-submitted when photo is selected) -->
+    <form id="avatarUploadForm" method="POST" action="{{ url_for('profile_view', user_id=user.id if user.id != current_user.id else None) }}" enctype="multipart/form-data" style="display: none;">
+        <input type="hidden" name="full_name" value="{{ profile.full_name or user.username }}">
+        <input type="hidden" name="username" value="{{ user.username }}">
+        <input type="hidden" name="email" value="{{ user.email }}">
+        <input type="file" name="avatar" id="avatarFileInput" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" onchange="submitAvatarForm()">
+    </form>
+
+    <!-- Main Two-Column Layout -->
+    <div class="profile-mockup-grid">
+        <!-- Left Column: Profile Card -->
+        <div class="profile-mockup-sidebar-card">
+            <!-- Avatar Display with Camera Button Overlay -->
+            <div class="profile-avatar-wrapper">
+                {% if profile.avatar_url %}
+                <img src="{{ profile.avatar_url }}" alt="{{ profile.full_name or user.username }}" class="profile-avatar-circle" id="profileAvatarImg">
+                {% else %}
+                <div class="profile-avatar-circle profile-avatar-initials" id="profileAvatarImg">
+                    <span>{{ (profile.full_name or user.username)[:2]|upper }}</span>
+                </div>
+                {% endif %}
+
+                <!-- Camera Overlay Button -->
+                <button type="button" class="profile-camera-btn" onclick="triggerAvatarUpload()" title="Change Profile Picture" aria-label="Change Profile Picture">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Name and Username -->
+            <h2 class="profile-card-name">{{ profile.full_name or user.username }}</h2>
+            <div class="profile-card-handle">@{{ user.username }}</div>
+
+            <!-- Role Pill -->
+            <div class="profile-card-role-wrap">
+                <span class="profile-card-role-pill">{{ user.role|capitalize }}</span>
+            </div>
+
+            <!-- Profile Completion Progress Bar -->
+            <div class="profile-completion-section">
+                <div class="profile-completion-header">
+                    <span class="completion-label">Profile Completion</span>
+                    <span class="completion-value">{{ profile.completion_percentage }}%</span>
+                </div>
+                <div class="completion-track">
+                    <div class="completion-fill" style="width: {{ profile.completion_percentage }}%;"></div>
+                </div>
+            </div>
+
+            <!-- Details List with Icons -->
+            <div class="profile-meta-list">
+                <div class="profile-meta-item">
+                    <svg class="meta-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                    <span class="meta-text">{{ user.email }}</span>
+                </div>
+
+                <div class="profile-meta-item">
+                    <svg class="meta-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                    <span class="meta-text">{{ profile.phone_number or 'No phone added' }}</span>
+                </div>
+
+                <div class="profile-meta-item">
+                    <svg class="meta-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span class="meta-text">Joined {{ user.created_at.strftime('%b %d, %Y') if user.created_at else 'Oct 30, 2026' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Organized Information Tabs Card -->
+        <div class="profile-mockup-tabs-card">
+            <!-- Tab Navigation Header -->
+            <div class="profile-nav-tabs">
+                <button type="button" class="tab-item active" id="tabBtnPersonal" onclick="switchProfileTab('personal')">
+                    <span>Personal Info</span>
+                </button>
+                <button type="button" class="tab-item" id="tabBtnAcademic" onclick="switchProfileTab('academic')">
+                    <span>Academic Info</span>
+                </button>
+                <button type="button" class="tab-item" id="tabBtnPreferences" onclick="switchProfileTab('preferences')">
+                    <span>Study Preferences</span>
+                </button>
+            </div>
+
+            <!-- =======================================================
+                 VIEW MODE: Organized Key-Value Data Display
+                 ======================================================= -->
+            <div id="profileViewContainer" class="profile-tab-content-wrap">
+                <!-- TAB 1: Personal Information -->
+                <div class="tab-pane active" id="viewPanePersonal">
+                    <div class="pane-section-header">
+                        <div class="pane-icon-badge">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <div class="pane-title-group">
+                            <h3 class="pane-title">Personal Information</h3>
+                            <span class="pane-subtitle">Your basic account details</span>
+                        </div>
+                    </div>
+
+                    <div class="profile-kv-table">
+                        <div class="kv-row">
+                            <span class="kv-label">Full Name</span>
+                            <span class="kv-value font-medium">{{ profile.full_name or user.username }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">Username</span>
+                            <span class="kv-value font-medium">{{ user.username }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">Email Address</span>
+                            <span class="kv-value font-medium">{{ user.email }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">Phone Number</span>
+                            <span class="kv-value font-medium">{{ profile.phone_number or 'Not provided' }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: Academic Information -->
+                <div class="tab-pane" id="viewPaneAcademic" style="display: none;">
+                    <div class="pane-section-header">
+                        <div class="pane-icon-badge">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                        </div>
+                        <div class="pane-title-group">
+                            <h3 class="pane-title">Academic Information</h3>
+                            <span class="pane-subtitle">Coursework, semester, and institutional affiliation</span>
+                        </div>
+                    </div>
+
+                    <div class="profile-kv-table">
+                        <div class="kv-row">
+                            <span class="kv-label">College / Institute</span>
+                            <span class="kv-value">{{ profile.college_name or 'Not specified' }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">University</span>
+                            <span class="kv-value">{{ profile.university_name or 'Not specified' }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">Degree / Program</span>
+                            <span class="kv-value">{{ profile.degree_course or 'Not specified' }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">Branch / Department</span>
+                            <span class="kv-value">{{ profile.branch_department or 'Not specified' }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">Current Semester</span>
+                            <span class="kv-value">{{ profile.current_semester or 'Not specified' }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">Academic Session</span>
+                            <span class="kv-value">{{ profile.academic_session or 'Not specified' }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">Roll Number</span>
+                            <span class="kv-value">{{ profile.roll_number or 'Not specified' }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: Study Preferences -->
+                <div class="tab-pane" id="viewPanePreferences" style="display: none;">
+                    <div class="pane-section-header">
+                        <div class="pane-icon-badge">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        </div>
+                        <div class="pane-title-group">
+                            <h3 class="pane-title">Study Preferences</h3>
+                            <span class="pane-subtitle">Roadmap capacity and AI study assistant settings</span>
+                        </div>
+                    </div>
+
+                    <div class="profile-kv-table">
+                        <div class="kv-row">
+                            <span class="kv-label">Daily Study Capacity</span>
+                            <span class="kv-value font-medium">{{ profile.daily_study_hours or 3.0 }} Hours / day</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">Preferred Study Time</span>
+                            <span class="kv-value font-medium">{{ profile.preferred_study_time or 'Evening' }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">AI Explanation Language</span>
+                            <span class="kv-value font-medium">{{ profile.preferred_language or 'English' }}</span>
+                        </div>
+                        <div class="kv-row">
+                            <span class="kv-label">Target Exam / Goal</span>
+                            <span class="kv-value font-medium">{{ profile.target_exam or 'University Exams' }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =======================================================
+                 EDIT MODE: Interactive Form Submitting to POST /profile
+                 ======================================================= -->
+            <div id="profileEditContainer" style="display: none;">
+                <form method="POST" action="{{ url_for('profile_view', user_id=user.id if user.id != current_user.id else None) }}" enctype="multipart/form-data" id="profileForm" onsubmit="handleProfileSubmit(event)">
+                    
+                    <!-- TAB 1 Form: Personal Info -->
+                    <div class="edit-tab-pane" id="editPanePersonal">
+                        <div class="pane-section-header">
+                            <div class="pane-icon-badge">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            </div>
+                            <div class="pane-title-group">
+                                <h3 class="pane-title">Edit Personal Information</h3>
+                                <span class="pane-subtitle">Update your credentials and identity</span>
+                            </div>
+                        </div>
+
+                        <div class="form-row-2col">
+                            <div class="form-group">
+                                <label for="edit_full_name" class="form-label">Full Name <span class="required-star">*</span></label>
+                                <input type="text" name="full_name" id="edit_full_name" class="form-control" value="{{ profile.full_name or user.username }}" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_username" class="form-label">Username <span class="required-star">*</span></label>
+                                <input type="text" name="username" id="edit_username" class="form-control" value="{{ user.username }}" required minlength="3">
+                            </div>
+                        </div>
+
+                        <div class="form-row-2col">
+                            <div class="form-group">
+                                <label for="edit_email" class="form-label">Email Address <span class="required-star">*</span></label>
+                                <input type="email" name="email" id="edit_email" class="form-control" value="{{ user.email }}" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_phone_number" class="form-label">Phone Number <span class="optional-badge">Optional</span></label>
+                                <input type="tel" name="phone_number" id="edit_phone_number" class="form-control" value="{{ profile.phone_number or '' }}" placeholder="e.g. +91 98765 43210">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2 Form: Academic Info -->
+                    <div class="edit-tab-pane" id="editPaneAcademic" style="display: none;">
+                        <div class="pane-section-header">
+                            <div class="pane-icon-badge">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                            </div>
+                            <div class="pane-title-group">
+                                <h3 class="pane-title">Edit Academic Information</h3>
+                                <span class="pane-subtitle">Update your college, course, and semester</span>
+                            </div>
+                        </div>
+
+                        <div class="form-row-2col">
+                            <div class="form-group">
+                                <label for="edit_college_name" class="form-label">College / Institute Name</label>
+                                <input type="text" name="college_name" id="edit_college_name" class="form-control" value="{{ profile.college_name or '' }}" placeholder="e.g. ABES Engineering College">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_university_name" class="form-label">University Name</label>
+                                <input type="text" name="university_name" id="edit_university_name" class="form-control" value="{{ profile.university_name or '' }}" placeholder="e.g. AKTU">
+                            </div>
+                        </div>
+
+                        <div class="form-row-2col">
+                            <div class="form-group">
+                                <label for="edit_degree_course" class="form-label">Degree / Course</label>
+                                <input type="text" name="degree_course" id="edit_degree_course" class="form-control" value="{{ profile.degree_course or '' }}" placeholder="e.g. B.Tech">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_branch_department" class="form-label">Branch / Department</label>
+                                <input type="text" name="branch_department" id="edit_branch_department" class="form-control" value="{{ profile.branch_department or '' }}" placeholder="e.g. Computer Science">
+                            </div>
+                        </div>
+
+                        <div class="form-row-3col">
+                            <div class="form-group">
+                                <label for="edit_current_semester" class="form-label">Current Semester</label>
+                                <select name="current_semester" id="edit_current_semester" class="form-control">
+                                    <option value="">Select Semester</option>
+                                    {% for i in range(1, 9) %}
+                                    <option value="Semester {{ i }}" {% if profile.current_semester == ('Semester ' ~ i) %}selected{% endif %}>Semester {{ i }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_academic_session" class="form-label">Academic Session</label>
+                                <input type="text" name="academic_session" id="edit_academic_session" class="form-control" value="{{ profile.academic_session or '' }}" placeholder="e.g. 2026-2027">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_roll_number" class="form-label">Roll Number</label>
+                                <input type="text" name="roll_number" id="edit_roll_number" class="form-control" value="{{ profile.roll_number or '' }}" placeholder="e.g. 2200320100123">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3 Form: Study Preferences -->
+                    <div class="edit-tab-pane" id="editPanePreferences" style="display: none;">
+                        <div class="pane-section-header">
+                            <div class="pane-icon-badge">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            </div>
+                            <div class="pane-title-group">
+                                <h3 class="pane-title">Edit Study Preferences</h3>
+                                <span class="pane-subtitle">Configure roadmap pacing and AI response language</span>
+                            </div>
+                        </div>
+
+                        <div class="form-row-2col">
+                            <div class="form-group">
+                                <label for="edit_daily_study_hours" class="form-label">Daily Study Capacity (Hours)</label>
+                                <input type="number" name="daily_study_hours" id="edit_daily_study_hours" class="form-control" min="0.5" max="16" step="0.5" value="{{ profile.daily_study_hours or 3.0 }}">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_preferred_study_time" class="form-label">Preferred Study Time</label>
+                                <select name="preferred_study_time" id="edit_preferred_study_time" class="form-control">
+                                    <option value="Early Morning" {% if profile.preferred_study_time == 'Early Morning' %}selected{% endif %}>Early Morning</option>
+                                    <option value="Morning" {% if profile.preferred_study_time == 'Morning' %}selected{% endif %}>Morning</option>
+                                    <option value="Afternoon" {% if profile.preferred_study_time == 'Afternoon' %}selected{% endif %}>Afternoon</option>
+                                    <option value="Evening" {% if profile.preferred_study_time == 'Evening' or not profile.preferred_study_time %}selected{% endif %}>Evening</option>
+                                    <option value="Night" {% if profile.preferred_study_time == 'Night' %}selected{% endif %}>Night</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row-2col">
+                            <div class="form-group">
+                                <label for="edit_preferred_language" class="form-label">AI Explanation Language</label>
+                                <select name="preferred_language" id="edit_preferred_language" class="form-control">
+                                    <option value="English" {% if profile.preferred_language == 'English' or not profile.preferred_language %}selected{% endif %}>English</option>
+                                    <option value="Hindi" {% if profile.preferred_language == 'Hindi' %}selected{% endif %}>Hindi (हिंदी)</option>
+                                    <option value="Hinglish" {% if profile.preferred_language == 'Hinglish' %}selected{% endif %}>Hinglish</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit_target_exam" class="form-label">Target Exam / Goal</label>
+                                <input type="text" name="target_exam" id="edit_target_exam" class="form-control" value="{{ profile.target_exam or '' }}" placeholder="e.g. End-Semester Finals">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Edit Form Actions -->
+                    <div class="profile-edit-actions-bar">
+                        <button type="button" class="btn btn-outline" onclick="toggleEditProfileMode(false)">Cancel</button>
+                        <button type="submit" id="profileSaveBtn" class="btn btn-mockup-primary">
+                            <span class="btn-save-text">Save Changes</span>
+                            <div class="auth-btn-spinner" style="display: none;"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentActiveTab = 'personal';
+let isEditMode = false;
+
+function switchProfileTab(tabName) {
+    currentActiveTab = tabName;
+
+    // Update Tab Buttons
+    ['personal', 'academic', 'preferences'].forEach(t => {
+        const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
+        if (btn) {
+            if (t === tabName) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        }
+    });
+
+    // Update View Panes
+    const viewP = document.getElementById('viewPanePersonal');
+    const viewA = document.getElementById('viewPaneAcademic');
+    const viewPr = document.getElementById('viewPanePreferences');
+
+    if (viewP) viewP.style.display = (tabName === 'personal') ? 'block' : 'none';
+    if (viewA) viewA.style.display = (tabName === 'academic') ? 'block' : 'none';
+    if (viewPr) viewPr.style.display = (tabName === 'preferences') ? 'block' : 'none';
+
+    // Update Edit Panes
+    const editP = document.getElementById('editPanePersonal');
+    const editA = document.getElementById('editPaneAcademic');
+    const editPr = document.getElementById('editPanePreferences');
+
+    if (editP) editP.style.display = (tabName === 'personal') ? 'block' : 'none';
+    if (editA) editA.style.display = (tabName === 'academic') ? 'block' : 'none';
+    if (editPr) editPr.style.display = (tabName === 'preferences') ? 'block' : 'none';
+}
+
+function toggleEditProfileMode(forceState) {
+    if (forceState !== undefined) {
+        isEditMode = forceState;
+    } else {
+        isEditMode = !isEditMode;
+    }
+
+    const viewContainer = document.getElementById('profileViewContainer');
+    const editContainer = document.getElementById('profileEditContainer');
+    const btnText = document.getElementById('btnEditText');
+
+    if (isEditMode) {
+        if (viewContainer) viewContainer.style.display = 'none';
+        if (editContainer) editContainer.style.display = 'block';
+        if (btnText) btnText.textContent = 'View Profile';
+    } else {
+        if (viewContainer) viewContainer.style.display = 'block';
+        if (editContainer) editContainer.style.display = 'none';
+        if (btnText) btnText.textContent = 'Edit Profile';
+    }
+
+    // Keep active tab synced
+    switchProfileTab(currentActiveTab);
+}
+
+function triggerAvatarUpload() {
+    const fileInput = document.getElementById('avatarFileInput');
+    if (fileInput) fileInput.click();
+}
+
+function submitAvatarForm() {
+    const fileInput = document.getElementById('avatarFileInput');
+    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+        const form = document.getElementById('avatarUploadForm');
+        if (form) form.submit();
+    }
+}
+
+function handleProfileSubmit(event) {
+    const btn = document.getElementById('profileSaveBtn');
+    if (!btn) return;
+    const textSpan = btn.querySelector('.btn-save-text');
+    const spinner = btn.querySelector('.auth-btn-spinner');
+
+    btn.disabled = true;
+    if (textSpan) textSpan.textContent = 'Saving...';
+    if (spinner) spinner.style.display = 'inline-block';
+}
+</script>
+{% endblock %}

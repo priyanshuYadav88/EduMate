@@ -45,31 +45,126 @@ class HybridAIService:
         self,
         gemini_api_key: Optional[str] = None,
         gemini_model: Optional[str] = None,
+        groq_api_key: Optional[str] = None,
+        groq_model: Optional[str] = None,
+        groq_base_url: Optional[str] = None,
         ollama_base_url: Optional[str] = None,
         ollama_model: Optional[str] = None,
         gemini_timeout_sec: float = 12.0,
+        groq_timeout_sec: float = 15.0,
         ollama_timeout_sec: float = 20.0,
-        max_gemini_retries: int = 1
+        max_retries: int = 1
     ):
+        # Gemini Defaults
         self.gemini_api_key = gemini_api_key or os.getenv('GEMINI_API_KEY', '').strip()
-        self.gemini_model = gemini_model or os.getenv('GEMINI_MODEL', 'gemini-3.8-flash').strip()
+        self.gemini_model = gemini_model or os.getenv('GEMINI_MODEL', 'gemini-3.5-flash').strip()
+        self.gemini_timeout_sec = gemini_timeout_sec
+        self.gemini_enabled = True
+        self.gemini_priority = 1
+
+        # Groq Defaults
+        self.groq_api_key = groq_api_key or os.getenv('GROQ_API_KEY', '').strip()
+        self.groq_model = groq_model or os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b').strip()
+        self.groq_base_url = (groq_base_url or os.getenv('GROQ_BASE_URL', 'https://api.groq.com/openai/v1')).rstrip('/')
+        self.groq_timeout_sec = groq_timeout_sec
+        self.groq_enabled = bool(self.groq_api_key)
+        self.groq_priority = 2
+
+        # Ollama Defaults
         self.ollama_base_url = (ollama_base_url or os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434')).rstrip('/')
         self.ollama_model = ollama_model or os.getenv('OLLAMA_MODEL', 'gemma3:1b').strip()
-        self.gemini_timeout_sec = gemini_timeout_sec
         self.ollama_timeout_sec = ollama_timeout_sec
-        self.max_gemini_retries = max_gemini_retries
+        self.ollama_enabled = True
+        self.ollama_priority = 3
+
+        self.max_retries = max_retries
 
     # --------------------------------------------------------------------------
-    # 1. Provider Health & Diagnostics (Safe for Admin and Status Display)
+    # Database Configuration Synchronization
+    # --------------------------------------------------------------------------
+    def sync_from_db(self):
+        """
+        Synchronizes in-memory provider parameters from AIProviderConfig database table
+        if running within an active Flask application context.
+        Ensures admin dashboard changes take immediate effect without server restart.
+        """
+        try:
+            from flask import current_app
+            if not current_app:
+                return
+            from models import AIProviderConfig
+            configs = AIProviderConfig.query.all()
+            for cfg in configs:
+                if cfg.provider_id == 'gemini':
+                    self.gemini_enabled = cfg.is_enabled
+                    self.gemini_priority = cfg.priority
+                    if cfg.model_name:
+                        self.gemini_model = cfg.model_name
+                    if cfg.timeout_sec:
+                        self.gemini_timeout_sec = cfg.timeout_sec
+                    decrypted = cfg.get_api_key()
+                    if decrypted:
+                        self.gemini_api_key = decrypted
+                    elif os.getenv('GEMINI_API_KEY'):
+                        self.gemini_api_key = os.getenv('GEMINI_API_KEY', '').strip()
+                elif cfg.provider_id == 'groq':
+                    self.groq_enabled = cfg.is_enabled
+                    self.groq_priority = cfg.priority
+                    if cfg.model_name:
+                        self.groq_model = cfg.model_name
+                    if cfg.timeout_sec:
+                        self.groq_timeout_sec = cfg.timeout_sec
+                    if cfg.api_base_url:
+                        self.groq_base_url = cfg.api_base_url.rstrip('/')
+                    decrypted = cfg.get_api_key()
+                    if decrypted:
+                        self.groq_api_key = decrypted
+                    elif os.getenv('GROQ_API_KEY'):
+                        self.groq_api_key = os.getenv('GROQ_API_KEY', '').strip()
+                elif cfg.provider_id == 'ollama':
+                    self.ollama_enabled = cfg.is_enabled
+                    self.ollama_priority = cfg.priority
+                    if cfg.model_name:
+                        self.ollama_model = cfg.model_name
+                    if cfg.timeout_sec:
+                        self.ollama_timeout_sec = cfg.timeout_sec
+                    if cfg.api_base_url:
+                        self.ollama_base_url = cfg.api_base_url.rstrip('/')
+        except Exception as e:
+            logger.debug(f"AI provider DB sync notice: {e}")
+
+    # --------------------------------------------------------------------------
+    # Helpers: Key Masking and Secret Sanitization
+    # --------------------------------------------------------------------------
+    def _mask_key(self, key: Optional[str]) -> str:
+        if not key:
+            return "Not configured"
+        key = key.strip()
+        if len(key) <= 8:
+            return "••••••••"
+        return f"{key[:4]}••••••••{key[-4:]}"
+
+    def _sanitize_secrets(self, text: str) -> str:
+        """Strips raw API secrets from logs, exception traces, and error returns."""
+        cleaned = str(text)
+        for k in [self.gemini_api_key, self.groq_api_key]:
+            if k and len(k) > 4:
+                cleaned = cleaned.replace(k, f"{k[:4]}...[REDACTED]")
+        return cleaned
+
+    # --------------------------------------------------------------------------
+    # 1. Provider Health & Diagnostics (Safe for Display)
     # --------------------------------------------------------------------------
     def get_provider_status(self) -> Dict[str, Any]:
         """
-        Check connectivity and configuration of both providers.
-        Never exposes the actual API key.
+        Returns connectivity and configuration status for Gemini, Groq, and Ollama.
+        Masks all sensitive keys.
         """
+        self.sync_from_db()
         has_gemini_key = bool(self.gemini_api_key and len(self.gemini_api_key) > 8)
+        has_groq_key = bool(self.groq_api_key and len(self.groq_api_key) > 8)
 
-        # Check Ollama connectivity
+        # Check Ollama reachability
         ollama_reachable = False
         ollama_installed_models = []
         try:
@@ -83,43 +178,70 @@ class HybridAIService:
 
         ollama_model_ready = any(self.ollama_model in m for m in ollama_installed_models) if ollama_reachable else False
 
-        overall_available = has_gemini_key or (ollama_reachable and ollama_model_ready)
+        overall_available = (
+            (self.gemini_enabled and has_gemini_key) or
+            (self.groq_enabled and has_groq_key) or
+            (self.ollama_enabled and ollama_reachable and ollama_model_ready)
+        )
 
         return {
             'overall_available': overall_available,
             'primary': {
                 'provider': 'gemini',
+                'name': 'Google Gemini',
+                'enabled': self.gemini_enabled,
+                'priority': self.gemini_priority,
                 'model': self.gemini_model,
                 'configured': has_gemini_key,
-                'key_masked': f"{self.gemini_api_key[:6]}...{self.gemini_api_key[-4:]}" if has_gemini_key else 'Not configured',
-                'status': 'Configured (Primary)' if has_gemini_key else 'Missing API Key'
+                'key_masked': self._mask_key(self.gemini_api_key),
+                'status': 'Configured' if has_gemini_key else 'Missing API Key'
+            },
+            'groq': {
+                'provider': 'groq',
+                'name': 'Groq API',
+                'enabled': self.groq_enabled,
+                'priority': self.groq_priority,
+                'model': self.groq_model,
+                'configured': has_groq_key,
+                'key_masked': self._mask_key(self.groq_api_key),
+                'status': 'Configured' if has_groq_key else 'Missing API Key'
             },
             'fallback': {
                 'provider': 'ollama',
+                'name': 'Ollama (Local AI)',
+                'enabled': self.ollama_enabled,
+                'priority': self.ollama_priority,
                 'model': self.ollama_model,
                 'base_url': self.ollama_base_url,
                 'reachable': ollama_reachable,
                 'model_ready': ollama_model_ready,
                 'available_models': ollama_installed_models,
-                'status': 'Ready (Fallback)' if (ollama_reachable and ollama_model_ready) else (
+                'status': 'Ready' if (ollama_reachable and ollama_model_ready) else (
                     'Server unreachable' if not ollama_reachable else f"Model '{self.ollama_model}' not found"
                 )
             }
         }
 
     # --------------------------------------------------------------------------
-    # 2. Primary Provider: Google Gemini
+    # 2. Provider: Google Gemini
     # --------------------------------------------------------------------------
-    def _call_gemini(self, prompt: str, system_instruction: Optional[str] = None) -> str:
-        """
-        Executes text generation using the official Google Gen AI SDK (google.genai)
-        or direct REST API fallback if the SDK is not installed in the environment.
-        Includes bounded retries for transient connection errors.
-        """
-        if not self.gemini_api_key:
-            raise AIServiceException("Gemini API key is not configured in .env")
+    def _call_gemini(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        timeout_sec: Optional[float] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None
+    ) -> str:
+        """Executes text generation using Google Gemini (SDK or REST fallback)."""
+        key = api_key or self.gemini_api_key
+        if not key:
+            raise AIServiceException("Gemini API key is not configured.")
+        m = model or self.gemini_model
+        timeout = timeout_sec or self.gemini_timeout_sec
 
-        # Check whether google.genai is importable
+        # Attempt google.genai SDK
         has_sdk = False
         try:
             import google.genai
@@ -129,66 +251,71 @@ class HybridAIService:
             has_sdk = False
 
         if has_sdk:
-            # Instantiate Client with specified API key and timeout in milliseconds
             client = google.genai.Client(
-                api_key=self.gemini_api_key,
-                http_options={'timeout': int(self.gemini_timeout_sec * 1000)}
+                api_key=key,
+                http_options={'timeout': int(timeout * 1000)}
             )
+            config = types.GenerateContentConfig(system_instruction=system_instruction) if system_instruction else None
 
-            config = None
-            if system_instruction:
-                config = types.GenerateContentConfig(system_instruction=system_instruction)
+            # Build content payload (string if single-turn, dict list if multi-turn)
+            if chat_history:
+                sdk_contents = []
+                for turn in chat_history:
+                    role = 'model' if turn.get('role') in ('assistant', 'model') else 'user'
+                    sdk_contents.append({"role": role, "parts": [{"text": turn.get('content', '')}]})
+                sdk_contents.append({"role": "user", "parts": [{"text": prompt}]})
+            else:
+                sdk_contents = prompt
 
             last_error = None
-            for attempt in range(1 + self.max_gemini_retries):
+            for attempt in range(1 + self.max_retries):
                 try:
                     response = client.models.generate_content(
-                        model=self.gemini_model,
-                        contents=prompt,
+                        model=m,
+                        contents=sdk_contents,
                         config=config
                     )
                     if response and hasattr(response, 'text') and response.text:
                         return response.text.strip()
                     raise AIServiceException("Gemini returned an empty response.")
                 except errors.ClientError as e:
-                    logger.warning(f"Gemini ClientError on attempt {attempt + 1}: {e}")
-                    raise AIServiceException(f"Gemini provider error (code {getattr(e, 'code', '4xx')}): {getattr(e, 'message', str(e))}")
+                    raise AIServiceException(f"Gemini client error (code {getattr(e, 'code', '4xx')}): {getattr(e, 'message', str(e))}")
                 except errors.ServerError as e:
-                    logger.warning(f"Gemini ServerError on attempt {attempt + 1}: {e}")
                     last_error = e
-                    if attempt < self.max_gemini_retries:
+                    if attempt < self.max_retries:
                         time.sleep(1.0)
                         continue
                     raise AIServiceException(f"Gemini server error (code {getattr(e, 'code', '5xx')}): {str(e)}")
                 except Exception as e:
-                    logger.warning(f"Gemini connection error on attempt {attempt + 1}: {e}")
                     last_error = e
-                    if attempt < self.max_gemini_retries:
+                    if attempt < self.max_retries:
                         time.sleep(1.0)
                         continue
-                    raise AIServiceException(f"Gemini request failed: {str(e)}")
-            raise AIServiceException(f"Gemini failed after retries: {str(last_error)}")
+                    raise AIServiceException(f"Gemini request failed: {self._sanitize_secrets(str(e))}")
+            raise AIServiceException(f"Gemini failed after retries: {self._sanitize_secrets(str(last_error))}")
 
-        # Direct REST API call if google.genai SDK is not installed
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent?key={self.gemini_api_key}"
-        payload = {
-            "contents": [{
-                "parts": [{"text": prompt}]
-            }]
+        # REST API fallback
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
+        rest_contents = []
+        if chat_history:
+            for turn in chat_history:
+                role = 'model' if turn.get('role') in ('assistant', 'model') else 'user'
+                rest_contents.append({"role": role, "parts": [{"text": turn.get('content', '')}]})
+        rest_contents.append({"role": "user", "parts": [{"text": prompt}]})
+        payload: Dict[str, Any] = {
+            "contents": rest_contents
         }
         if system_instruction:
-            payload["systemInstruction"] = {
-                "parts": [{"text": system_instruction}]
-            }
+            payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
 
         last_error = None
-        for attempt in range(1 + self.max_gemini_retries):
+        for attempt in range(1 + self.max_retries):
             try:
                 resp = requests.post(
                     endpoint,
                     json=payload,
                     headers={'Content-Type': 'application/json'},
-                    timeout=self.gemini_timeout_sec
+                    timeout=timeout
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -201,38 +328,185 @@ class HybridAIService:
                 elif resp.status_code in (400, 401, 403, 404):
                     err_msg = resp.text
                     try:
-                        err_data = resp.json()
-                        err_msg = err_data.get('error', {}).get('message', resp.text)
+                        err_msg = resp.json().get('error', {}).get('message', resp.text)
                     except Exception:
                         pass
                     raise AIServiceException(f"Gemini provider error ({resp.status_code}): {err_msg}")
                 elif resp.status_code in (429, 500, 502, 503, 504):
-                    if attempt < self.max_gemini_retries:
+                    if attempt < self.max_retries:
                         time.sleep(1.0)
                         continue
                     raise AIServiceException(f"Gemini server error ({resp.status_code}): {resp.text}")
                 else:
                     raise AIServiceException(f"Gemini unexpected status ({resp.status_code}): {resp.text}")
             except requests.exceptions.RequestException as e:
-                logger.warning(f"Gemini REST connection error on attempt {attempt + 1}: {e}")
                 last_error = e
-                if attempt < self.max_gemini_retries:
+                if attempt < self.max_retries:
                     time.sleep(1.0)
                     continue
-                raise AIServiceException(f"Gemini request failed: {str(e)}")
+                raise AIServiceException(f"Gemini request failed: {self._sanitize_secrets(str(e))}")
 
-        raise AIServiceException(f"Gemini REST failed after retries: {str(last_error)}")
+        raise AIServiceException(f"Gemini REST failed after retries: {self._sanitize_secrets(str(last_error))}")
 
     # --------------------------------------------------------------------------
-    # 3. Fallback Provider: Local Ollama (gemma3:1b)
+    # 3. Provider: Groq API (OpenAI-compatible Chat Completions)
     # --------------------------------------------------------------------------
-    def _call_ollama(self, prompt: str, system_instruction: Optional[str] = None) -> str:
+    def _call_groq(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        timeout_sec: Optional[float] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None
+    ) -> str:
         """
-        Executes text generation using local Ollama REST API.
+        Executes text generation using official Groq OpenAI-compatible chat completions endpoint.
         """
-        url = f"{self.ollama_base_url}/api/generate"
+        key = api_key or self.groq_api_key
+        if not key or not str(key).strip():
+            raise AIServiceException("Groq API key is missing or not configured.")
+        clean_key = str(key).strip()
+        m = model or self.groq_model
+        timeout = timeout_sec or self.groq_timeout_sec
+
+        url = f"{self.groq_base_url.rstrip('/')}/chat/completions"
+        auth_header = clean_key if clean_key.startswith("Bearer ") else f"Bearer {clean_key}"
+        headers = {
+            "Authorization": auth_header,
+            "Content-Type": "application/json"
+        }
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        if chat_history:
+            for turn in chat_history:
+                r = turn.get('role', 'user')
+                c = turn.get('content', '')
+                if r in ('user', 'assistant') and c:
+                    messages.append({"role": r, "content": c})
+        messages.append({"role": "user", "content": prompt})
+
         payload = {
-            'model': self.ollama_model,
+            "model": m,
+            "messages": messages,
+            "temperature": 0.4
+        }
+
+        last_error = None
+        max_attempts = 1 + max(2, self.max_retries)
+        for attempt in range(max_attempts):
+            try:
+                resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    if choices and "message" in choices[0] and "content" in choices[0]["message"]:
+                        return choices[0]["message"]["content"].strip()
+                    raise AIServiceException("Groq returned an empty response.")
+
+                # Extract detailed error message from response JSON if present
+                err_detail = ""
+                try:
+                    err_json = resp.json()
+                    err_data = err_json.get("error", {})
+                    if isinstance(err_data, dict):
+                        err_detail = err_data.get("message", "")
+                    elif isinstance(err_data, str):
+                        err_detail = err_data
+                except Exception:
+                    err_detail = resp.text
+
+                detail_suffix = f": {err_detail}" if err_detail else ""
+
+                if resp.status_code == 401:
+                    raise AIServiceException(f"Groq error (401 Unauthorized): Invalid or incorrectly loaded API key{detail_suffix}")
+                elif resp.status_code == 403:
+                    raise AIServiceException(f"Groq error (403 Forbidden): Permission or access denied{detail_suffix}")
+                elif resp.status_code == 404:
+                    raise AIServiceException(f"Groq error (404 Not Found): Invalid endpoint or model '{m}'{detail_suffix}")
+                elif resp.status_code == 429:
+                    if attempt < max_attempts - 1:
+                        match = re.search(r'try again in ([0-9.]+)\s*s', err_detail, re.IGNORECASE)
+                        sleep_time = max(3.0, float(match.group(1)) + 1.2) if match else 3.5
+                        time.sleep(min(sleep_time, 15.0))
+                        continue
+                    raise AIServiceException(f"Groq error (429 Rate Limit): API rate limit or quota exceeded{detail_suffix}")
+                elif 500 <= resp.status_code < 600:
+                    last_error = AIServiceException(f"Groq server error ({resp.status_code}): Upstream service error{detail_suffix}")
+                    if attempt < self.max_retries:
+                        time.sleep(1.0)
+                        continue
+                    raise last_error
+                else:
+                    raise AIServiceException(f"Groq unexpected status ({resp.status_code}){detail_suffix}")
+
+            except requests.exceptions.Timeout as e:
+                last_error = AIServiceException(f"Groq connection timeout: Request timed out after {timeout}s (Network issue).")
+                if attempt < self.max_retries:
+                    time.sleep(1.0)
+                    continue
+                raise last_error
+            except requests.exceptions.ConnectionError as e:
+                last_error = AIServiceException(f"Groq connection failure: Unable to reach {self.groq_base_url} (Network issue).")
+                if attempt < self.max_retries:
+                    time.sleep(1.0)
+                    continue
+                raise last_error
+            except requests.exceptions.RequestException as e:
+                raise AIServiceException(f"Groq request failed: {self._sanitize_secrets(str(e))}")
+
+        if last_error:
+            raise last_error
+        raise AIServiceException("Groq request failed after retries.")
+
+    # --------------------------------------------------------------------------
+    # 4. Provider: Local Ollama
+    # --------------------------------------------------------------------------
+    def _call_ollama(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        model: Optional[str] = None,
+        base_url: Optional[str] = None,
+        timeout_sec: Optional[float] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None
+    ) -> str:
+        """Executes text generation using local Ollama REST API."""
+        m = model or self.ollama_model
+        url = (base_url or self.ollama_base_url).rstrip('/')
+        timeout = timeout_sec or self.ollama_timeout_sec
+
+        if chat_history:
+            endpoint = f"{url}/api/chat"
+            messages = []
+            if system_instruction:
+                messages.append({"role": "system", "content": system_instruction})
+            for turn in chat_history:
+                r = turn.get('role', 'user')
+                c = turn.get('content', '')
+                if r in ('user', 'assistant') and c:
+                    messages.append({"role": r, "content": c})
+            messages.append({"role": "user", "content": prompt})
+
+            payload: Dict[str, Any] = {
+                'model': m,
+                'messages': messages,
+                'stream': False
+            }
+            try:
+                resp = requests.post(endpoint, json=payload, timeout=timeout)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    text = data.get('message', {}).get('content', '').strip()
+                    if text:
+                        return text
+            except Exception:
+                pass  # Fall back to generate endpoint
+
+        endpoint = f"{url}/api/generate"
+        payload: Dict[str, Any] = {
+            'model': m,
             'prompt': prompt,
             'stream': False
         }
@@ -240,83 +514,229 @@ class HybridAIService:
             payload['system'] = system_instruction
 
         try:
-            resp = requests.post(url, json=payload, timeout=self.ollama_timeout_sec)
+            resp = requests.post(endpoint, json=payload, timeout=timeout)
             if resp.status_code == 200:
                 data = resp.json()
                 text = data.get('response', '').strip()
                 if text:
                     return text
                 raise AIServiceException("Ollama returned an empty response.")
-            raise AIServiceException(f"Ollama returned HTTP status {resp.status_code}: {resp.text}")
+            raise AIServiceException(f"Ollama HTTP status {resp.status_code}: {resp.text}")
         except requests.exceptions.RequestException as e:
-            logger.warning(f"Ollama connection error: {e}")
-            raise AIServiceException(f"Ollama server unavailable at {self.ollama_base_url}: {str(e)}")
+            raise AIServiceException(f"Ollama server unavailable at {url}: {str(e)}")
 
     # --------------------------------------------------------------------------
-    # 4. Hybrid Dispatcher with Disciplined Automatic Fallback
+    # 5. Connection Diagnostics Testing
+    # --------------------------------------------------------------------------
+    def test_provider_connection(
+        self,
+        provider_id: str,
+        custom_key: Optional[str] = None,
+        custom_model: Optional[str] = None,
+        custom_url: Optional[str] = None,
+        custom_timeout: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Executes a targeted, lightweight diagnostic connection test for a specific provider.
+        Returns a dictionary with success status, state, and human-readable message.
+        """
+        self.sync_from_db()
+        p_id = provider_id.strip().lower()
+
+        try:
+            if p_id == 'gemini':
+                key = custom_key or self.gemini_api_key
+                if not key:
+                    return {'success': False, 'status': 'error', 'message': 'Gemini API key is missing or not configured.'}
+                m = custom_model or self.gemini_model
+                out = self._call_gemini("Ping test. Respond with 'PONG'.", model=m, api_key=key, timeout_sec=custom_timeout or 8.0)
+                return {'success': True, 'status': 'active', 'message': f"Connected successfully to Gemini model '{m}'. Response received."}
+
+            elif p_id == 'groq':
+                key = custom_key or self.groq_api_key
+                if not key or not str(key).strip():
+                    return {'success': False, 'status': 'error', 'message': 'Groq API key is missing or not configured.'}
+                clean_key = str(key).strip()
+                m = custom_model or self.groq_model
+                url = (custom_url or self.groq_base_url).rstrip('/')
+                timeout = custom_timeout or 10.0
+                auth_header = clean_key if clean_key.startswith("Bearer ") else f"Bearer {clean_key}"
+
+                # Step 1: Query GET /models to verify API key and model availability
+                models_url = f"{url}/models"
+                try:
+                    m_resp = requests.get(models_url, headers={"Authorization": auth_header}, timeout=timeout)
+                except requests.exceptions.Timeout:
+                    return {'success': False, 'status': 'error', 'message': f"Groq connection timeout: Request to {models_url} timed out after {timeout}s (Network issue)."}
+                except requests.exceptions.ConnectionError:
+                    return {'success': False, 'status': 'error', 'message': f"Groq connection failure: Unable to reach {models_url} (Network issue)."}
+                except requests.exceptions.RequestException as e:
+                    return {'success': False, 'status': 'error', 'message': f"Groq request failed: {self._sanitize_secrets(str(e))}"}
+
+                if m_resp.status_code == 401:
+                    return {'success': False, 'status': 'error', 'message': 'Groq error (401 Unauthorized): Invalid or incorrectly loaded API key.'}
+                elif m_resp.status_code == 403:
+                    return {'success': False, 'status': 'error', 'message': 'Groq error (403 Forbidden): Permission or access denied.'}
+                elif m_resp.status_code == 404:
+                    return {'success': False, 'status': 'error', 'message': f"Groq error (404 Not Found): Invalid endpoint ({models_url})."}
+                elif m_resp.status_code != 200:
+                    return {'success': False, 'status': 'error', 'message': f"Groq error ({m_resp.status_code}): {self._sanitize_secrets(m_resp.text)}"}
+
+                try:
+                    data = m_resp.json()
+                    available_models = [item.get('id') for item in data.get('data', []) if isinstance(item, dict) and item.get('id')]
+                except Exception:
+                    available_models = []
+
+                if available_models and m not in available_models:
+                    chat_models = [mod for mod in available_models if not mod.startswith('whisper') and 'guard' not in mod]
+                    return {
+                        'success': False,
+                        'status': 'error',
+                        'message': f"Groq error (404 Not Found): Configured model '{m}' does not exist or is not available. Available chat models: {', '.join(chat_models[:4]) or ', '.join(available_models[:4])}."
+                    }
+
+                # Step 2: Minimal POST /chat/completions verification request
+                out = self._call_groq(
+                    prompt="Reply with: Groq connection successful",
+                    model=m,
+                    api_key=clean_key,
+                    timeout_sec=timeout
+                )
+                return {
+                    'success': True,
+                    'status': 'active',
+                    'message': f"Connected successfully to Groq model '{m}'. Response: {out}"
+                }
+
+            elif p_id == 'ollama':
+                url = (custom_url or self.ollama_base_url).rstrip('/')
+                m = custom_model or self.ollama_model
+                resp = requests.get(f"{url}/api/tags", timeout=custom_timeout or 5.0)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = [mod.get('name') for mod in data.get('models', []) if 'name' in mod]
+                    if any(m in mod for mod in models):
+                        return {'success': True, 'status': 'active', 'message': f"Ollama online at {url}. Target model '{m}' is installed."}
+                    return {'success': False, 'status': 'error', 'message': f"Ollama online at {url}, but model '{m}' is not installed ({', '.join(models[:3]) or 'none'})."}
+                return {'success': False, 'status': 'error', 'message': f"Ollama returned HTTP status {resp.status_code}."}
+
+            else:
+                return {'success': False, 'status': 'error', 'message': f"Unknown AI provider identifier '{provider_id}'."}
+
+        except Exception as e:
+            sanitized = self._sanitize_secrets(str(e))
+            return {'success': False, 'status': 'error', 'message': sanitized}
+
+    # --------------------------------------------------------------------------
+    # 6. Centralized Multi-Provider Dispatcher with Sequential Priority Fallback
     # --------------------------------------------------------------------------
     def generate_response(
         self,
         prompt: str,
-        system_instruction: Optional[str] = None
+        system_instruction: Optional[str] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """
-        Main entry point for text generation.
-        1. Validates user prompt (rejects empty/whitespace without touching AI).
-        2. Attempts Google Gemini primary.
-        3. If Gemini encounters a provider/availability/quota error, falls back to Ollama.
-        4. Returns actual provider used, response text, and fallback flag.
-        5. If both fail, raises clear exception or returns honest failure structure.
+        Main text generation dispatcher.
+        1. Validates input.
+        2. Syncs enabled providers from DB or uses configured defaults.
+        3. Executes providers sequentially in strict priority order (1, 2, 3...).
+        4. Skips disabled providers completely without issuing requests.
+        5. Automatically falls back to next enabled provider if primary fails.
+        6. Indicates clearly which provider actually generated the output.
         """
         clean_prompt = (prompt or '').strip()
         if not clean_prompt:
             raise InvalidInputException("Prompt cannot be empty or whitespace only.")
 
-        gemini_error = None
-        ollama_error = None
+        self.sync_from_db()
 
-        # Attempt 1: Gemini Primary
-        try:
-            output = self._call_gemini(clean_prompt, system_instruction=system_instruction)
-            return {
-                'success': True,
-                'provider': 'gemini',
+        # Build list of active enabled providers
+        active_providers = []
+
+        if self.gemini_enabled:
+            active_providers.append({
+                'id': 'gemini',
+                'name': 'Google Gemini',
                 'model': self.gemini_model,
-                'fallback_used': False,
-                'response': output
-            }
-        except Exception as e:
-            gemini_error = str(e)
-            logger.info(f"Gemini primary unavailable ({gemini_error}). Attempting Ollama fallback...")
+                'priority': self.gemini_priority,
+                'call': lambda: self._call_gemini(clean_prompt, system_instruction=system_instruction, chat_history=chat_history)
+            })
 
-        # Attempt 2: Ollama Fallback
-        try:
-            output = self._call_ollama(clean_prompt, system_instruction=system_instruction)
-            return {
-                'success': True,
-                'provider': 'ollama',
+        if self.groq_enabled:
+            active_providers.append({
+                'id': 'groq',
+                'name': 'Groq API',
+                'model': self.groq_model,
+                'priority': self.groq_priority,
+                'call': lambda: self._call_groq(clean_prompt, system_instruction=system_instruction, chat_history=chat_history)
+            })
+
+        if self.ollama_enabled:
+            active_providers.append({
+                'id': 'ollama',
+                'name': 'Ollama (Local AI)',
                 'model': self.ollama_model,
-                'fallback_used': True,
-                'gemini_error': gemini_error,
-                'response': output
-            }
-        except Exception as e:
-            ollama_error = str(e)
-            logger.error(f"Ollama fallback also failed ({ollama_error}).")
+                'priority': self.ollama_priority,
+                'call': lambda: self._call_ollama(clean_prompt, system_instruction=system_instruction, chat_history=chat_history)
+            })
 
-        # Both providers failed — return honest failure without fake output
+        # Sort by priority ascending (1 = Primary, 2 = Fallback 1, 3 = Fallback 2)
+        active_providers.sort(key=lambda x: x['priority'])
+
+        if not active_providers:
+            return {
+                'success': False,
+                'provider': None,
+                'provider_name': None,
+                'model': None,
+                'fallback_used': False,
+                'error_message': 'No AI providers are currently enabled in the Admin API Management Center.'
+            }
+
+        provider_errors: Dict[str, str] = {}
+
+        for attempt_idx, prov in enumerate(active_providers):
+            try:
+                output = prov['call']()
+                return {
+                    'success': True,
+                    'provider': prov['id'],
+                    'provider_name': prov['name'],
+                    'model': prov['model'],
+                    'fallback_used': (attempt_idx > 0),
+                    'gemini_error': provider_errors.get('gemini'),
+                    'groq_error': provider_errors.get('groq'),
+                    'ollama_error': provider_errors.get('ollama'),
+                    'response': output
+                }
+            except Exception as e:
+                sanitized_err = self._sanitize_secrets(str(e))
+                logger.warning(f"Provider {prov['name']} failed on attempt {attempt_idx + 1} ({sanitized_err}). Falling back...")
+                provider_errors[prov['id']] = sanitized_err
+
+        # All enabled providers failed
+        if 'gemini' in provider_errors and 'ollama' in provider_errors:
+            error_msg = f"Both AI providers are currently unavailable (offline). Primary (Gemini): {provider_errors.get('gemini')} | Fallback (Ollama): {provider_errors.get('ollama')}"
+            if 'groq' in provider_errors:
+                error_msg += f" | Fallback (Groq): {provider_errors.get('groq')}"
+        else:
+            error_msg = f"All enabled AI providers failed: {'; '.join(f'{k}: {v}' for k, v in provider_errors.items())}"
+
         return {
             'success': False,
             'provider': None,
+            'provider_name': None,
             'model': None,
             'fallback_used': True,
-            'gemini_error': gemini_error,
-            'ollama_error': ollama_error,
-            'error_message': (
-                f"Both AI providers are currently unavailable. "
-                f"Primary (Gemini): {gemini_error} | Fallback (Ollama): {ollama_error}"
-            )
+            'gemini_error': provider_errors.get('gemini'),
+            'groq_error': provider_errors.get('groq'),
+            'ollama_error': provider_errors.get('ollama'),
+            'errors': provider_errors,
+            'error_message': error_msg
         }
+
 
 
     # --------------------------------------------------------------------------
@@ -613,15 +1033,18 @@ class HybridAIService:
                 u_name = item.get('unit_name') or item.get('unit') or "Unit 1"
                 t_title = item.get('topic_title') or item.get('title') or item.get('name') or "Core Topic"
                 is_comp = item.get('is_completed', False) or (t_title.lower().strip() in completed_set)
+                tid = item.get('topic_id')
             else:
                 u_name = "Unit 1"
                 t_title = str(item).strip()
                 is_comp = t_title.lower().strip() in completed_set
+                tid = None
 
             flat_topics.append({
                 "unit_name": u_name,
                 "topic_title": t_title,
-                "is_completed": is_comp
+                "is_completed": is_comp,
+                "topic_id": tid
             })
 
         if not flat_topics:
@@ -655,7 +1078,8 @@ class HybridAIService:
                 "topic_title": t["topic_title"],
                 "estimated_hours": min(daily_hours, est_hours_per_topic),
                 "is_revision": False,
-                "is_completed": t["is_completed"]
+                "is_completed": t["is_completed"],
+                "topic_id": t.get("topic_id")
             })
 
         # Append dedicated revision milestones
@@ -693,21 +1117,22 @@ class HybridAIService:
         self,
         user_message: str,
         approved_syllabus_context: List[Dict[str, Any]],
-        chat_history: Optional[List[Dict[str, str]]] = None
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        selected_context: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """
         Module 5: EduMate AI Assistant.
-        Answers student queries with grounding in their approved syllabus.
-        Cites source pages when applicable, clearly identifies general knowledge,
-        and displays provider provenance.
+        Answers student queries with natural, ChatGPT-style conversational intelligence,
+        grounded in syllabus when available, multilingual (English, Hindi, Hinglish),
+        and contextual across conversation turns.
         """
         clean_msg = (user_message or '').strip()
         if not clean_msg:
             raise InvalidInputException("Please enter a valid study query.")
 
-        # Build concise syllabus reference text
+        # Build concise syllabus reference text if available
         syllabus_lines = []
-        for sub in approved_syllabus_context:
+        for sub in (approved_syllabus_context or []):
             sub_name = sub.get('subject_name', 'Subject')
             syllabus_lines.append(f"Subject: {sub_name}")
             for u in sub.get('units', []):
@@ -720,21 +1145,49 @@ class HybridAIService:
 
         syllabus_summary = "\n".join(syllabus_lines[:60])  # Bounded to avoid prompt bloat
 
+        context_parts = []
+        if selected_context:
+            subj = selected_context.get('subject_name')
+            unit = selected_context.get('unit_name')
+            top = selected_context.get('topic_title')
+            ctx_desc = []
+            if subj: ctx_desc.append(f"Subject: {subj}")
+            if unit: ctx_desc.append(f"Unit: {unit}")
+            if top: ctx_desc.append(f"Topic: {top}")
+            if ctx_desc:
+                context_parts.append(f"CURRENT FOCUSED TOPIC: {', '.join(ctx_desc)}")
+            if selected_context.get('preferred_language'):
+                pref_lang = selected_context.get('preferred_language')
+                context_parts.append(f"STUDENT PREFERRED EXPLANATION LANGUAGE: {pref_lang}. Adapt your natural conversational explanation to favor {pref_lang} (e.g. English, Hindi, or conversational Hinglish) while keeping technical symbols and code accurate.")
+
+        if syllabus_summary:
+            context_parts.append(f"STUDENT'S UPLOADED SYLLABUS REFERENCE (use as background context):\n{syllabus_summary}")
+
+        context_block = "\n\n".join(context_parts) if context_parts else "No specific syllabus uploaded yet. Assist using general academic knowledge."
+
         system_instruction = (
-            "You are EduMate AI Study Assistant for college students. "
-            "Your role is to explain concepts clearly, provide study guidance, and assist with academic queries.\n"
-            "STUDENT'S ENROLLED SYLLABUS CONTEXT:\n"
-            f"{syllabus_summary or 'No approved syllabus uploaded yet.'}\n\n"
-            "INSTRUCTIONS:\n"
-            "1. If the student's question relates to a topic in their syllabus, explain it clearly with examples "
-            "and cite the relevant syllabus unit/source pages (e.g. '[Syllabus Ref: Unit 1, Page 2]').\n"
-            "2. If the student asks about a concept NOT in their syllabus, answer helpfully with general academic knowledge, "
-            "and state explicitly: '[General Knowledge: Topic is outside your uploaded syllabus]'.\n"
-            "3. Never invent fake page references.\n"
-            "4. Be concise, pedagogical, encouraging, and format formulas using clear text/markdown."
+            "You are EduMate AI, an intelligent, friendly, and expert college study companion and academic tutor.\n"
+            "Your goal is to have natural, clear, ChatGPT-style conversations that genuinely help students understand, learn, and excel.\n\n"
+            f"{context_block}\n\n"
+            "CONVERSATIONAL GUIDELINES:\n"
+            "1. Language & Tone: Adapt seamlessly to the student's language. If the student asks in English, reply in natural, clear English. "
+            "If they ask in Hinglish (e.g., 'samjha do', 'in Hinglish', 'bhai pointer kyun use karte hain'), reply in natural, conversational Hinglish. "
+            "If they ask in Hindi, reply in Hindi. Match their casual or formal tone.\n"
+            "2. Contextual Awareness: Maintain conversation continuity across turns. When the user asks follow-up questions referencing 'it', 'here', 'that example', or 'again in simple words', resolve the reference from the conversation history naturally.\n"
+            "3. Dynamic Depth: Keep short/simple answers concise and direct. Provide comprehensive step-by-step breakdowns only when asked or when explaining a complex topic.\n"
+            "4. Natural Formatting (No Rigid Templates): NEVER force repetitive headers, boilerplate disclaimer tags, or arbitrary tables into every reply. "
+            "Do NOT output tags like '[General Knowledge: ...]' or robotic warnings. Simply answer the question naturally.\n"
+            "5. Rich Content Presentation: Use Markdown effectively:\n"
+            "   - Use clean headings (###) when structuring multi-part explanations.\n"
+            "   - Use bullet points only when listing items or steps.\n"
+            "   - Format code inside fenced code blocks with language identifiers (e.g. ```c ... ```) and helpful inline comments.\n"
+            "   - Format mathematical equations and complexity notations in standard LaTeX (e.g. $O(1)$, $O(n)$, $x^2$).\n"
+            "   - Use Markdown tables when comparing two or more concepts.\n"
+            "6. Pedagogical Quality: Use intuitive real-world analogies, concise code examples, or step-by-step walkthroughs whenever they make abstract concepts easy to grasp.\n"
+            "7. Directness: Never start by repeating the student's question. Never output unsolicited study plans or revision schedules for conceptual queries."
         )
 
-        resp = self.generate_response(prompt=clean_msg, system_instruction=system_instruction)
+        resp = self.generate_response(prompt=clean_msg, system_instruction=system_instruction, chat_history=chat_history)
 
         # Detect any page references cited in response
         page_refs = re.findall(r'Page[s]?\s*([0-9]+(?:,\s*[0-9]+)*)', resp.get('response', ''), re.IGNORECASE)

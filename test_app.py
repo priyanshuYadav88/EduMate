@@ -51,9 +51,10 @@ if 'google' not in sys.modules:
 
 from app import create_app
 from models import (
-    db, User, Subject, Topic, Task, Exam, TimetableEntry,
+    db, User, UserProfile, Subject, Topic, Task, Exam, TimetableEntry,
     RoadmapPlan, RoadmapItem, OfficialExamDirectory, AuditLog,
-    UploadedPdfDocument, SystemSetting, QuizAttempt, ChatMessage
+    UploadedPdfDocument, SystemSetting, QuizAttempt, ChatMessage,
+    cleanup_verified_demo_accounts
 )
 
 class EduMateTestCase(unittest.TestCase):
@@ -664,7 +665,25 @@ class EduMateTestCase(unittest.TestCase):
         res_reg = self.client.get('/register', follow_redirects=True)
         self.assertIn(b'Public registration is currently closed', res_reg.data)
 
-        # 3. Log back in as admin and create backup
+        # 3. Log back in as admin, re-enable registrations (default state), and create backup
+        self.client.post('/login', data={'identifier': 'test_admin', 'password': 'admin123'})
+        res_reenable = self.client.post('/admin/system/settings/update', data={
+            'allow_registrations': 'true',
+            'maintenance_mode': 'false'
+        }, follow_redirects=True)
+        self.assertEqual(res_reenable.status_code, 200)
+
+        with self.app.app_context():
+            self.assertEqual(SystemSetting.get_val('allow_registrations'), 'true')
+            self.assertEqual(SystemSetting.get_val('maintenance_mode'), 'false')
+
+        # Verify /register is now open and accessible
+        self.client.get('/logout')
+        res_reg_open = self.client.get('/register')
+        self.assertEqual(res_reg_open.status_code, 200)
+        self.assertIn(b'Create Student Account', res_reg_open.data)
+
+        # Log back in as admin
         self.client.post('/login', data={'identifier': 'test_admin', 'password': 'admin123'})
         res_backup = self.client.post('/admin/system/backup/create', follow_redirects=True)
         self.assertEqual(res_backup.status_code, 200)
@@ -1532,6 +1551,965 @@ class EduMateTestCase(unittest.TestCase):
         self.assertEqual(admin_res.status_code, 302)
         self.assertIn('/login', admin_res.location)
 
+    # ==========================================================================
+    # TESTS: Registration Security, Role Enforcement & Admin Data Protection
+    # ==========================================================================
+    def test_registration_role_student_and_rejection_of_admin_tampering(self):
+        """Test that new public registrations always receive 'student' role, even if tampered with role=admin"""
+        self.client.get('/logout')
+
+        # 1. Attempt to register with tampered form data specifying role='admin'
+        res = self.client.post('/register', data={
+            'username': 'tampered_student',
+            'email': 'tampered@student.edu',
+            'password': 'password123',
+            'confirm_password': 'password123',
+            'role': 'admin',
+            'is_admin': 'true'
+        }, follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+
+        # 2. Verify user in database has strictly 'student' role and NOT admin
+        with self.app.app_context():
+            u = User.query.filter_by(username='tampered_student').first()
+            self.assertIsNotNone(u)
+            self.assertEqual(u.role, 'student')
+            self.assertFalse(u.is_admin)
+
+        # 3. Verify existing admin accounts remain intact and unaltered
+        with self.app.app_context():
+            admin_u = User.query.filter_by(username='test_admin').first()
+            self.assertIsNotNone(admin_u)
+            self.assertEqual(admin_u.role, 'admin')
+            self.assertTrue(admin_u.is_admin)
+
+    def test_registration_blocks_reserved_usernames_and_case_insensitive_collisions(self):
+        """Test that public registration rejects reserved administrative usernames and case-insensitive duplicates"""
+        self.client.get('/logout')
+
+        # 1. Reserved admin username
+        res_res = self.client.post('/register', data={
+            'username': 'administrator',
+            'email': 'admin_imposter@test.edu',
+            'password': 'password123',
+            'confirm_password': 'password123'
+        }, follow_redirects=True)
+        self.assertIn(b'reserved', res_res.data)
+
+        # 2. Case-insensitive collision with existing student 'test_student'
+        res_col = self.client.post('/register', data={
+            'username': 'TEST_STUDENT',
+            'email': 'new_email@test.edu',
+            'password': 'password123',
+            'confirm_password': 'password123'
+        }, follow_redirects=True)
+        self.assertIn(b'already taken', res_col.data)
+
+        # 3. Model level validator rejects invalid roles
+        with self.app.app_context():
+            with self.assertRaises(ValueError):
+                bad_user = User(username='bad_role_user', email='bad@test.com', role='superadmin')
+                db.session.add(bad_user)
+                db.session.commit()
+
+    # ==========================================================================
+    # TESTS: API Management Center & Multi-Provider Architecture
+    # ==========================================================================
+    def test_admin_only_api_management_routes_reject_student_and_guest(self):
+        """Test that /admin/api-management routes are restricted strictly to administrators"""
+        self.client.get('/logout')
+
+        # 1. Unauthenticated guest
+        guest_res = self.client.get('/admin/api-management', follow_redirects=False)
+        self.assertEqual(guest_res.status_code, 302)
+        self.assertIn('/login', guest_res.location)
+
+        # 2. Authenticated student receives 403 Forbidden
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+        student_get = self.client.get('/admin/api-management')
+        self.assertEqual(student_get.status_code, 403)
+
+        student_post_save = self.client.post('/admin/api-management/save/groq', data={'model_name': 'test'})
+        self.assertEqual(student_post_save.status_code, 403)
+
+        student_post_test = self.client.post('/admin/api-management/test/groq')
+        self.assertEqual(student_post_test.status_code, 403)
+
+    def test_api_management_page_renders_clean_light_theme_with_masked_keys(self):
+        """Test admin API Management dashboard rendering, provider list, and masked key presentation"""
+        self.client.post('/login', data={'identifier': 'test_admin', 'password': 'admin123'})
+        res = self.client.get('/admin/api-management')
+        self.assertEqual(res.status_code, 200)
+
+        # Displays all three supported providers
+        self.assertIn(b'Google Gemini', res.data)
+        self.assertIn(b'Groq API', res.data)
+        self.assertIn(b'Ollama (Local AI)', res.data)
+
+        # Verifies encryption badge
+        self.assertIn(b'AES-256 Storage: Enabled', res.data)
+
+        # Never exposes raw secret keys in HTML
+        self.assertNotIn(b'secret_unmasked_api_key', res.data)
+
+    def test_api_key_secure_storage_encryption_and_masking(self):
+        """Test Fernet encryption at rest, masked display, and non-destructive empty form updates"""
+        with self.app.app_context():
+            from models import AIProviderConfig
+            groq_cfg = AIProviderConfig.query.filter_by(provider_id='groq').first()
+            self.assertIsNotNone(groq_cfg)
+
+            # 1. Set key and verify encrypted at rest
+            raw_key = 'gsk_test1234567890abcdef1234567890'
+            groq_cfg.set_api_key(raw_key)
+            db.session.commit()
+
+            # Encrypted text in DB starts with Fernet header 'gAAAAA'
+            self.assertTrue(groq_cfg.api_key_encrypted.startswith('gAAAAA'))
+            self.assertNotIn(raw_key, groq_cfg.api_key_encrypted)
+
+            # Decryption returns original key
+            self.assertEqual(groq_cfg.get_api_key(), raw_key)
+
+            # Masked key shows prefix, bullets, and suffix
+            masked = groq_cfg.get_masked_key()
+            self.assertTrue(masked.startswith('gsk_'))
+            self.assertTrue(masked.endswith('7890'))
+            self.assertIn('••••••••', masked)
+
+            # Safe dict excludes raw and encrypted keys
+            safe_d = groq_cfg.to_safe_dict()
+            self.assertIn('masked_key', safe_d)
+            self.assertNotIn('api_key_encrypted', safe_d)
+
+        # 2. Submit update via admin without changing key (blank field)
+        self.client.post('/login', data={'identifier': 'test_admin', 'password': 'admin123'})
+        save_res = self.client.post('/admin/api-management/save/groq', data={
+            'is_enabled': 'true',
+            'model_name': 'llama-3.3-70b-versatile',
+            'priority': 2,
+            'api_key': ''  # Empty input must NOT overwrite existing key
+        }, follow_redirects=True)
+        self.assertEqual(save_res.status_code, 200)
+
+        with self.app.app_context():
+            groq_cfg = AIProviderConfig.query.filter_by(provider_id='groq').first()
+            self.assertEqual(groq_cfg.get_api_key(), raw_key)
+
+    def test_providers_independent_enable_disable_and_simultaneous_enabled(self):
+        """Test enabling and disabling each provider independently and allowing multiple enabled providers"""
+        self.client.post('/login', data={'identifier': 'test_admin', 'password': 'admin123'})
+
+        # 1. Enable Groq while Gemini and Ollama remain enabled
+        self.client.post('/admin/api-management/save/groq', data={
+            'is_enabled': 'true',
+            'model_name': 'llama-3.3-70b-versatile',
+            'priority': 2
+        })
+        self.client.post('/admin/api-management/save/gemini', data={
+            'is_enabled': 'true',
+            'model_name': 'gemini-3.5-flash',
+            'priority': 1
+        })
+        self.client.post('/admin/api-management/save/ollama', data={
+            'is_enabled': 'true',
+            'model_name': 'gemma3:1b',
+            'priority': 3
+        })
+
+        with self.app.app_context():
+            from models import AIProviderConfig
+            cfgs = {c.provider_id: c.is_enabled for c in AIProviderConfig.query.all()}
+            self.assertTrue(cfgs['gemini'])
+            self.assertTrue(cfgs['groq'])
+            self.assertTrue(cfgs['ollama'])
+
+        # 2. Disable Gemini independently
+        self.client.post('/admin/api-management/save/gemini', data={
+            'model_name': 'gemini-3.5-flash',
+            'priority': 1
+            # is_enabled omitted -> False
+        })
+
+        with self.app.app_context():
+            from models import AIProviderConfig
+            cfgs = {c.provider_id: c.is_enabled for c in AIProviderConfig.query.all()}
+            self.assertFalse(cfgs['gemini'])
+            self.assertTrue(cfgs['groq'])  # Groq remains enabled!
+            self.assertTrue(cfgs['ollama'])
+
+    def test_multi_provider_priority_and_sequential_fallback(self):
+        """Test automatic fallback from Primary (Gemini) to Groq when Gemini encounters a provider error"""
+        from ai_service import HybridAIService
+        service = HybridAIService(
+            gemini_api_key="mock_gemini_key",
+            groq_api_key="mock_groq_key"
+        )
+        service.gemini_enabled = True
+        service.gemini_priority = 1
+        service.groq_enabled = True
+        service.groq_priority = 2
+        service.ollama_enabled = False
+
+        # Mock: Gemini fails (503), Groq succeeds
+        with patch.object(service, '_call_gemini') as mock_gemini:
+            mock_gemini.side_effect = Exception("Gemini server unavailable 503")
+            with patch.object(service, '_call_groq') as mock_groq:
+                mock_groq.return_value = "Groq response: Arrays are contiguous memory blocks."
+
+                res = service.generate_response("Explain arrays")
+                self.assertTrue(res['success'])
+                self.assertEqual(res['provider'], 'groq')
+                self.assertEqual(res['provider_name'], 'Groq API')
+                self.assertTrue(res['fallback_used'])
+                self.assertIn("Arrays are contiguous", res['response'])
+                self.assertIn("503", res['gemini_error'])
+
+    def test_disabled_providers_skipped_completely(self):
+        """Test that disabled providers are completely skipped and never receive network requests"""
+        from ai_service import HybridAIService
+        service = HybridAIService(
+            gemini_api_key="mock_gemini_key",
+            groq_api_key="mock_groq_key"
+        )
+        service.gemini_enabled = False  # Gemini disabled
+        service.groq_enabled = True     # Groq enabled (Primary)
+        service.groq_priority = 1
+        service.ollama_enabled = False
+
+        with patch.object(service, '_call_gemini') as mock_gemini:
+            with patch.object(service, '_call_groq') as mock_groq:
+                mock_groq.return_value = "Groq direct response."
+
+                res = service.generate_response("Hello")
+                self.assertTrue(res['success'])
+                self.assertEqual(res['provider'], 'groq')
+                self.assertFalse(res['fallback_used'])
+                # Gemini must never have been called
+                mock_gemini.assert_not_called()
+                mock_groq.assert_called_once()
+
+    def test_groq_request_construction_and_response_parsing(self):
+        """Test Groq API request formatting, headers, payload, and JSON response parsing"""
+        from ai_service import HybridAIService
+        service = HybridAIService(
+            groq_api_key="gsk_valid_mock_key",
+            groq_model="llama-3.3-70b-versatile"
+        )
+
+        with patch('requests.post') as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "choices": [{
+                    "message": {
+                        "role": "assistant",
+                        "content": "A binary search tree has ordered left and right subtrees."
+                    }
+                }]
+            }
+            mock_post.return_value = mock_resp
+
+            output = service._call_groq(
+                prompt="Explain BST",
+                system_instruction="Be concise."
+            )
+            self.assertIn("binary search tree", output)
+
+            # Verify request headers and URL
+            called_url = mock_post.call_args[0][0]
+            self.assertEqual(called_url, "https://api.groq.com/openai/v1/chat/completions")
+            called_headers = mock_post.call_args[1]['headers']
+            self.assertEqual(called_headers['Authorization'], "Bearer gsk_valid_mock_key")
+            called_json = mock_post.call_args[1]['json']
+            self.assertEqual(called_json['model'], "llama-3.3-70b-versatile")
+            self.assertEqual(len(called_json['messages']), 2)
+            self.assertEqual(called_json['messages'][0]['role'], "system")
+            self.assertEqual(called_json['messages'][1]['role'], "user")
+
+    def test_groq_error_handling_invalid_key_and_rate_limit(self):
+        """Test Groq error classification for invalid API key (401) and rate limits (429)"""
+        from ai_service import HybridAIService, AIServiceException
+        service = HybridAIService(groq_api_key="gsk_invalid_mock_key")
+
+        with patch('requests.post') as mock_post:
+            # 1. Test 401 Unauthorized
+            mock_resp_401 = MagicMock()
+            mock_resp_401.status_code = 401
+            mock_resp_401.text = '{"error": {"message": "Invalid API Key"}}'
+            mock_post.return_value = mock_resp_401
+
+            with self.assertRaises(AIServiceException) as ctx_401:
+                service._call_groq("Hello")
+            self.assertIn("401 Unauthorized", str(ctx_401.exception))
+            # Verify no secret key is in the exception
+            self.assertNotIn("gsk_invalid_mock_key", str(ctx_401.exception))
+
+            # 2. Test 429 Rate Limit
+            mock_resp_429 = MagicMock()
+            mock_resp_429.status_code = 429
+            mock_resp_429.text = '{"error": {"message": "Rate limit reached"}}'
+            mock_post.return_value = mock_resp_429
+
+            with self.assertRaises(AIServiceException) as ctx_429:
+                service._call_groq("Hello")
+            self.assertIn("429 Rate Limit", str(ctx_429.exception))
+
+    def test_admin_api_connection_test_endpoint(self):
+        """Test the AJAX connection test endpoint for providers"""
+        self.client.post('/login', data={'identifier': 'test_admin', 'password': 'admin123'})
+
+        with patch('ai_service.HybridAIService.test_provider_connection') as mock_test:
+            mock_test.return_value = {
+                'success': True,
+                'status': 'active',
+                'message': "Connected successfully to Groq model 'llama-3.3-70b-versatile'."
+            }
+
+            res = self.client.post('/admin/api-management/test/groq')
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertTrue(data['success'])
+            self.assertEqual(data['status'], 'active')
+            self.assertIn("Connected successfully", data['message'])
+
+            # Verify audit log recorded action
+            with self.app.app_context():
+                log = AuditLog.query.filter_by(action='API_CONNECTION_TEST').first()
+                self.assertIsNotNone(log)
+                self.assertEqual(log.target_type, 'ai_provider')
+
+    def test_ai_study_assistant_features_work_with_groq(self):
+        """Test existing AI Study Assistant features function seamlessly when powered by Groq"""
+        from ai_service import ai_service
+
+        with patch.object(ai_service, 'generate_response') as mock_gen:
+            mock_gen.return_value = {
+                'success': True,
+                'provider': 'groq',
+                'provider_name': 'Groq API',
+                'model': 'llama-3.3-70b-versatile',
+                'fallback_used': False,
+                'response': "### Stacks\nA Stack is a LIFO linear data structure."
+            }
+
+            res = ai_service.generate_academic_content(
+                content_type="notes",
+                topic_name="Stacks & Queues",
+                unit_name="Unit 1",
+                subject_name="Data Structures"
+            )
+            self.assertTrue(res['success'])
+            self.assertEqual(res['provider'], 'groq')
+            self.assertIn("A Stack is a LIFO", res['content'])
+
+
+    def test_ai_assistant_dedicated_view_and_chat_persistence(self):
+        """Test Phase 1: Dedicated AI Assistant page, authentication, chat persistence and clearing"""
+        # Unauthenticated access redirects to login
+        res_anon = self.client.get('/ai-assistant')
+        self.assertEqual(res_anon.status_code, 302)
+        self.assertIn('/login', res_anon.headers['Location'])
+
+        # Authenticated student access succeeds
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+        res_auth = self.client.get('/ai-assistant')
+        self.assertEqual(res_auth.status_code, 200)
+        self.assertIn(b'AI Study Assistant', res_auth.data)
+        self.assertIn(b'Explain Topic', res_auth.data)
+        self.assertIn(b'Generate Short Notes', res_auth.data)
+
+        # Test user and assistant message persistence
+        with patch('ai_service.ai_service.chat_study_assistant') as mock_chat:
+            mock_chat.return_value = {
+                'success': True,
+                'reply': 'A binary search tree maintains sorted order.',
+                'provider': 'gemini',
+                'model': 'gemini-3.5-flash',
+                'fallback_used': False,
+                'source_pages': 'Page 10'
+            }
+
+            chat_res = self.client.post('/api/ai/chat', json={
+                'message': 'What is a binary search tree?',
+                'subject_id': self.subject_id
+            })
+            self.assertEqual(chat_res.status_code, 200)
+            chat_data = chat_res.get_json()
+            self.assertTrue(chat_data['online'])
+            self.assertEqual(chat_data['provider'], 'gemini')
+
+        # Check history contains both user and assistant roles
+        hist_res = self.client.get('/api/ai/chat/history')
+        self.assertEqual(hist_res.status_code, 200)
+        hist_data = hist_res.get_json()
+        self.assertTrue(hist_data['success'])
+        roles = [m['role'] for m in hist_data['messages']]
+        self.assertIn('user', roles)
+        self.assertIn('assistant', roles)
+
+        # Test clear chat endpoint
+        clear_res = self.client.post('/api/ai/chat/clear')
+        self.assertEqual(clear_res.status_code, 200)
+        self.assertTrue(clear_res.get_json()['success'])
+
+        # Verify chat history is now empty
+        hist_res_after = self.client.get('/api/ai/chat/history')
+        self.assertEqual(len(hist_res_after.get_json()['messages']), 0)
+
+    def test_ai_assistant_markdown_refresh_persistence_and_zero_api_usage(self):
+        """Test that page refresh and history retrieval:
+        1. Never call AI APIs (zero API consumption on refresh)
+        2. Deliver raw Markdown in clean <textarea class='raw-markdown-source'> containers
+        3. History endpoint returns raw uncorrupted Markdown
+        """
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+
+        sample_markdown = (
+            "# Merge Sort Algorithm\n\n"
+            "Merge sort is an efficient, comparison-based divide-and-conquer algorithm.\n\n"
+            "### Steps\n"
+            "1. **Divide**: Find midpoint.\n"
+            "2. **Conquer**: Recursively sort.\n"
+            "3. **Combine**: Merge subarrays.\n\n"
+            "```python\n"
+            "def merge_sort(arr):\n"
+            "    if len(arr) <= 1: return arr\n"
+            "    mid = len(arr) // 2\n"
+            "    left = merge_sort(arr[:mid])\n"
+            "    right = merge_sort(arr[mid:])\n"
+            "    return merge(left, right)\n"
+            "```\n\n"
+            "| Case | Complexity |\n"
+            "|---|---|\n"
+            "| Best | O(n log n) |\n"
+            "| Worst | O(n log n) |\n\n"
+            "> Example:\n"
+            "Input: [38, 27, 43, 3, 9, 82, 10]\n"
+            "Sorted: [3, 9, 10, 27, 38, 43, 82]\n"
+        )
+
+        with patch('ai_service.ai_service.chat_study_assistant') as mock_ai:
+            mock_ai.return_value = {
+                'success': True,
+                'reply': sample_markdown,
+                'provider': 'groq',
+                'model': 'llama-3.3-70b-versatile',
+                'fallback_used': False,
+                'source_pages': None
+            }
+
+            post_res = self.client.post('/api/ai/chat', json={
+                'message': 'Explain merge sort with example',
+                'subject_id': self.subject_id
+            })
+            self.assertEqual(post_res.status_code, 200)
+            mock_ai.assert_called_once()
+
+        # Step 2: Test page refresh (GET /ai-assistant) MUST NOT call AI service
+        with patch('ai_service.ai_service.chat_study_assistant') as mock_ai_refresh:
+            refresh_res = self.client.get('/ai-assistant')
+            self.assertEqual(refresh_res.status_code, 200)
+            # ZERO API consumption on refresh
+            mock_ai_refresh.assert_not_called()
+            # Contains safe raw markdown container
+            self.assertIn(b'class="raw-markdown-source"', refresh_res.data)
+            self.assertIn(b'# Merge Sort Algorithm', refresh_res.data)
+            self.assertIn(b'class="markdown-rendered-body"', refresh_res.data)
+
+        # Step 3: Test history API MUST NOT call AI service
+        with patch('ai_service.ai_service.chat_study_assistant') as mock_ai_hist:
+            hist_res = self.client.get('/api/ai/chat/history')
+            self.assertEqual(hist_res.status_code, 200)
+            mock_ai_hist.assert_not_called()
+            hist_data = hist_res.get_json()
+            self.assertTrue(hist_data['success'])
+            self.assertGreaterEqual(len(hist_data['messages']), 2)
+            assistant_msg = [m for m in hist_data['messages'] if m['role'] == 'assistant'][-1]
+            self.assertEqual(assistant_msg['content'], sample_markdown)
+
+    def test_quiz_runner_step_by_step_and_full_subject_scoring(self):
+        """Test Phase 2: Full-subject quiz generation, scoring with unanswered questions, and accuracy"""
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+
+        # Test full-subject MCQ generation
+        with patch('ai_service.ai_service.generate_academic_content') as mock_gen:
+            mock_gen.return_value = {
+                'success': True,
+                'content_type': 'mcq',
+                'topic': 'Comprehensive Assessment',
+                'questions': [
+                    {'question': 'Q1', 'options': ['A', 'B'], 'correct_answer': 0, 'explanation': 'Exp 1'},
+                    {'question': 'Q2', 'options': ['A', 'B'], 'correct_answer': 1, 'explanation': 'Exp 2'},
+                    {'question': 'Q3', 'options': ['A', 'B'], 'correct_answer': 0, 'explanation': 'Exp 3'},
+                    {'question': 'Q4', 'options': ['A', 'B'], 'correct_answer': 1, 'explanation': 'Exp 4'},
+                    {'question': 'Q5', 'options': ['A', 'B'], 'correct_answer': 0, 'explanation': 'Exp 5'}
+                ]
+            }
+
+            gen_res = self.client.post('/api/ai/academic-content', json={
+                'subject_id': self.subject_id,
+                'topic_id': 'all',
+                'content_type': 'mcq'
+            })
+            self.assertEqual(gen_res.status_code, 200)
+            gen_data = gen_res.get_json()
+            self.assertTrue(gen_data['success'])
+            self.assertEqual(len(gen_data['questions']), 5)
+
+        # Test scoring with mixed answers (2 correct, 1 incorrect, 2 unanswered)
+        mock_questions = [
+            {'question': 'Q1', 'options': ['A', 'B'], 'correct_answer': 0, 'explanation': 'Exp 1'},
+            {'question': 'Q2', 'options': ['A', 'B'], 'correct_answer': 1, 'explanation': 'Exp 2'},
+            {'question': 'Q3', 'options': ['A', 'B'], 'correct_answer': 0, 'explanation': 'Exp 3'},
+            {'question': 'Q4', 'options': ['A', 'B'], 'correct_answer': 1, 'explanation': 'Exp 4'},
+            {'question': 'Q5', 'options': ['A', 'B'], 'correct_answer': 0, 'explanation': 'Exp 5'}
+        ]
+        # Q1: 0 (correct), Q2: 1 (correct), Q3: 1 (incorrect), Q4: null (unanswered), Q5: null (unanswered)
+        submitted_answers = [0, 1, 1, None, None]
+
+        submit_res = self.client.post('/api/quiz/submit', json={
+            'subject_id': self.subject_id,
+            'topic_id': None,
+            'title': 'Test Comprehensive Drill',
+            'questions': mock_questions,
+            'answers': submitted_answers
+        })
+        self.assertEqual(submit_res.status_code, 200)
+        s_data = submit_res.get_json()
+        self.assertTrue(s_data['success'])
+        self.assertEqual(s_data['score'], 2)
+        self.assertEqual(s_data['total_questions'], 5)
+        self.assertEqual(s_data['correct_count'], 2)
+        self.assertEqual(s_data['incorrect_count'], 1)
+        self.assertEqual(s_data['unanswered_count'], 2)
+        self.assertEqual(s_data['accuracy_percentage'], 40)
+        self.assertEqual(s_data['percentage'], 40)
+
+    def test_roadmap_option_a_syllabus_topic_selection(self):
+        """Test Phase 3: Subject syllabus endpoint and generating roadmap from selected topic checkboxes"""
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+
+        # 1. Test /api/subjects/<id>/syllabus
+        syl_res = self.client.get(f'/api/subjects/{self.subject_id}/syllabus')
+        self.assertEqual(syl_res.status_code, 200)
+        syl_data = syl_res.get_json()
+        self.assertTrue(syl_data['success'])
+        self.assertEqual(syl_data['subject']['id'], self.subject_id)
+        self.assertGreaterEqual(len(syl_data['subject']['units']), 1)
+
+        # Get existing topic IDs
+        all_topic_ids = []
+        for unit in syl_data['subject']['units']:
+            for t in unit['topics']:
+                all_topic_ids.append(t['id'])
+        self.assertGreaterEqual(len(all_topic_ids), 2)
+
+        # Select only the first topic
+        selected_ids = [all_topic_ids[0]]
+
+        with self.app.app_context():
+            initial_topics_count = Topic.query.filter_by(subject_id=self.subject_id).count()
+            initial_subjects_count = Subject.query.filter_by(user_id=self.student_id).count()
+
+        exam_date_val = (date.today() + timedelta(days=15)).isoformat()
+        res_gen = self.client.post('/roadmap/generate', data={
+            'subject_id': self.subject_id,
+            'exam_date': exam_date_val,
+            'daily_hours': 2.0,
+            'topic_ids': selected_ids
+        }, follow_redirects=True)
+        self.assertEqual(res_gen.status_code, 200)
+
+        with self.app.app_context():
+            # Verify strict database rules: zero duplicate topics, zero duplicate subjects
+            final_topics_count = Topic.query.filter_by(subject_id=self.subject_id).count()
+            final_subjects_count = Subject.query.filter_by(user_id=self.student_id).count()
+            self.assertEqual(final_topics_count, initial_topics_count)
+            self.assertEqual(final_subjects_count, initial_subjects_count)
+
+            # Verify roadmap item is linked directly to topic_id
+            plan = RoadmapPlan.query.filter_by(subject_id=self.subject_id).first()
+            self.assertIsNotNone(plan)
+            study_items = [it for it in plan.items if not it.is_revision]
+            self.assertEqual(len(study_items), 1)
+            self.assertEqual(study_items[0].topic_id, selected_ids[0])
+
+    def test_demo_credentials_removed_from_login_page(self):
+        """Test Phase 1: Verify demo accounts and credentials are removed from login and public pages"""
+        res = self.client.get('/login')
+        self.assertEqual(res.status_code, 200)
+        html = res.get_data(as_text=True)
+
+        # Hardcoded demo credentials and callout cards must NOT exist
+        self.assertNotIn('student@edumate.local', html)
+        self.assertNotIn('student123', html)
+        self.assertNotIn('Evaluation / Viva Test Accounts', html)
+        self.assertNotIn('demo-credentials-callout', html)
+
+        # Polished light theme elements must exist
+        self.assertIn('auth-card', html)
+        self.assertIn('auth-logo-badge', html)
+        self.assertIn('auth-input', html)
+        self.assertIn('name="remember"', html)
+        self.assertIn('togglePasswordVisibility', html)
+        self.assertIn('openForgotModal', html)
+
+    def test_login_username_and_email_and_remember_me(self):
+        """Test Phase 2: Login via username, email, and session persistence via remember me"""
+        # 1. Login with username
+        res1 = self.client.post('/login', data={
+            'identifier': 'test_student',
+            'password': 'pass123'
+        }, follow_redirects=True)
+        self.assertEqual(res1.status_code, 200)
+        self.assertIn('/dashboard', res1.request.path)
+
+        # Logout
+        self.client.get('/logout', follow_redirects=True)
+
+        # 2. Login with email
+        res2 = self.client.post('/login', data={
+            'identifier': 'student@test.com',
+            'password': 'pass123'
+        }, follow_redirects=True)
+        self.assertEqual(res2.status_code, 200)
+        self.assertIn('/dashboard', res2.request.path)
+
+        # Logout
+        self.client.get('/logout', follow_redirects=True)
+
+        # 3. Test Remember Me session persistence
+        with self.client:
+            res3 = self.client.post('/login', data={
+                'identifier': 'test_student',
+                'password': 'pass123',
+                'remember': '1'
+            }, follow_redirects=True)
+            self.assertEqual(res3.status_code, 200)
+            from flask import session
+            self.assertTrue(session.permanent)
+
+    def test_enhanced_registration_validation_and_profile_creation(self):
+        """Test Phase 3: Registration with personal + academic details, validation, and profile creation"""
+        # Successful registration with all fields
+        res = self.client.post('/register', data={
+            'username': 'raj_kumar',
+            'email': 'raj@college.edu',
+            'password': 'mypassword123',
+            'confirm_password': 'mypassword123',
+            'full_name': 'Raj Kumar',
+            'phone_number': '9876543210',
+            'college_name': 'IIT Delhi',
+            'university_name': 'IIT',
+            'degree_course': 'B.Tech',
+            'branch_department': 'Computer Science',
+            'current_semester': 'Semester 4',
+            'academic_session': '2024-2028',
+            'roll_number': '24CS0101'
+        }, follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('/login', res.request.path)
+
+        with self.app.app_context():
+            new_user = User.query.filter_by(username='raj_kumar').first()
+            self.assertIsNotNone(new_user)
+            self.assertEqual(new_user.role, 'student')
+            self.assertIsNotNone(new_user.profile)
+            self.assertEqual(new_user.profile.full_name, 'Raj Kumar')
+            self.assertEqual(new_user.profile.phone_number, '9876543210')
+            self.assertEqual(new_user.profile.college_name, 'IIT Delhi')
+            self.assertEqual(new_user.profile.university_name, 'IIT')
+            self.assertEqual(new_user.profile.degree_course, 'B.Tech')
+            self.assertEqual(new_user.profile.branch_department, 'Computer Science')
+            self.assertEqual(new_user.profile.current_semester, 'Semester 4')
+            self.assertEqual(new_user.profile.roll_number, '24CS0101')
+            self.assertGreater(new_user.profile.completion_percentage, 50)
+
+        # Validation failure: Password mismatch
+        res_pw_mismatch = self.client.post('/register', data={
+            'username': 'student_mismatch',
+            'email': 'mismatch@test.com',
+            'password': 'password1',
+            'confirm_password': 'password2'
+        }, follow_redirects=True)
+        self.assertIn('Passwords do not match', res_pw_mismatch.get_data(as_text=True))
+
+        # Validation failure: Password too short
+        res_pw_short = self.client.post('/register', data={
+            'username': 'student_short',
+            'email': 'short@test.com',
+            'password': '123',
+            'confirm_password': '123'
+        }, follow_redirects=True)
+        self.assertIn('at least 6 characters', res_pw_short.get_data(as_text=True))
+
+        # Validation failure: Invalid email format
+        res_bad_email = self.client.post('/register', data={
+            'username': 'student_bademail',
+            'email': 'not-an-email',
+            'password': 'validpassword123',
+            'confirm_password': 'validpassword123'
+        }, follow_redirects=True)
+        self.assertIn('valid email address', res_bad_email.get_data(as_text=True))
+
+    def test_registration_duplicate_username_and_email_rejection(self):
+        """Test Phase 3: Case-insensitive duplicate username and email rejection"""
+        # Duplicate username (case-insensitive)
+        res1 = self.client.post('/register', data={
+            'username': 'TEST_STUDENT',
+            'email': 'unique1@test.com',
+            'password': 'password123',
+            'confirm_password': 'password123'
+        }, follow_redirects=True)
+        self.assertIn('Username is already taken', res1.get_data(as_text=True))
+
+        # Duplicate email (case-insensitive)
+        res2 = self.client.post('/register', data={
+            'username': 'unique_user',
+            'email': 'STUDENT@TEST.COM',
+            'password': 'password123',
+            'confirm_password': 'password123'
+        }, follow_redirects=True)
+        self.assertIn('Email is already registered', res2.get_data(as_text=True))
+
+    def test_profile_view_and_update(self):
+        """Test Phase 4: Student Profile GET view, completion calculation, and POST update"""
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+
+        # GET Profile View
+        res_get = self.client.get('/profile')
+        self.assertEqual(res_get.status_code, 200)
+        html = res_get.get_data(as_text=True)
+        self.assertIn('Student Profile', html)
+        self.assertIn('test_student', html)
+        self.assertIn('Profile Completion', html)
+
+        # POST Profile Update
+        res_post = self.client.post('/profile', data={
+            'full_name': 'Test Student FullName',
+            'username': 'test_student',
+            'email': 'student@test.com',
+            'phone_number': '+91 9999988888',
+            'college_name': 'National Institute of Tech',
+            'university_name': 'NIT',
+            'degree_course': 'B.Tech',
+            'branch_department': 'Information Technology',
+            'current_semester': 'Semester 6',
+            'academic_session': '2023-2027',
+            'roll_number': 'NIT-IT-042',
+            'daily_study_hours': '4.5',
+            'preferred_study_time': 'Morning',
+            'preferred_language': 'Hindi',
+            'target_exam': 'GATE CS 2026'
+        }, follow_redirects=True)
+        self.assertEqual(res_post.status_code, 200)
+
+        with self.app.app_context():
+            u = db.session.get(User, self.student_id)
+            self.assertEqual(u.profile.full_name, 'Test Student FullName')
+            self.assertEqual(u.profile.phone_number, '+91 9999988888')
+            self.assertEqual(u.profile.college_name, 'National Institute of Tech')
+            self.assertEqual(u.profile.daily_study_hours, 4.5)
+            self.assertEqual(u.profile.preferred_study_time, 'Morning')
+            self.assertEqual(u.profile.preferred_language, 'Hindi')
+            self.assertEqual(u.profile.target_exam, 'GATE CS 2026')
+            self.assertEqual(u.display_name, 'Test Student FullName')
+            self.assertGreaterEqual(u.profile.completion_percentage, 90)
+
+    def test_profile_photo_validation(self):
+        """Test Phase 4: Profile photo extension and size validation"""
+        import io
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+
+        # 1. Invalid file extension (.sh)
+        invalid_file = (io.BytesIO(b'#!/bin/bash\necho hack'), 'exploit.sh')
+        res_invalid = self.client.post('/profile', data={
+            'full_name': 'Student User',
+            'username': 'test_student',
+            'email': 'student@test.com',
+            'avatar': invalid_file
+        }, content_type='multipart/form-data', follow_redirects=True)
+        self.assertIn('Invalid photo format', res_invalid.get_data(as_text=True))
+
+        with self.app.app_context():
+            u = db.session.get(User, self.student_id)
+            self.assertIsNone(u.profile.avatar_url)
+
+        # 2. Oversized image (> 2MB)
+        large_image_data = b'x' * (2 * 1024 * 1024 + 100)
+        large_file = (io.BytesIO(large_image_data), 'large_avatar.png')
+        res_large = self.client.post('/profile', data={
+            'full_name': 'Student User',
+            'username': 'test_student',
+            'email': 'student@test.com',
+            'avatar': large_file
+        }, content_type='multipart/form-data', follow_redirects=True)
+        self.assertIn('Profile photo exceeds 2 MB limit', res_large.get_data(as_text=True))
+
+        # 3. Valid PNG upload
+        valid_png = (io.BytesIO(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4'), 'my_photo.png')
+        res_valid = self.client.post('/profile', data={
+            'full_name': 'Student User',
+            'username': 'test_student',
+            'email': 'student@test.com',
+            'avatar': valid_png
+        }, content_type='multipart/form-data', follow_redirects=True)
+        self.assertEqual(res_valid.status_code, 200)
+
+        with self.app.app_context():
+            u = db.session.get(User, self.student_id)
+            self.assertIsNotNone(u.profile.avatar_url)
+            self.assertTrue(u.profile.avatar_url.startswith('/static/uploads/avatars/avatar_u'))
+            self.assertTrue(u.profile.avatar_url.endswith('.png'))
+
+    def test_profile_authorization_isolation(self):
+        """Test Phase 4: Students cannot view/edit other students' profiles (403), admins can view/edit"""
+        # Login as other_student
+        self.client.post('/login', data={'identifier': 'other_student', 'password': 'pass123'})
+
+        # Attempt to view primary student's profile -> 403 Forbidden
+        res_view = self.client.get(f'/profile?user_id={self.student_id}')
+        self.assertEqual(res_view.status_code, 403)
+
+        # Attempt to edit primary student's profile -> 403 Forbidden
+        res_edit = self.client.post(f'/profile?user_id={self.student_id}', data={
+            'full_name': 'Hacked Name',
+            'username': 'hacked_name',
+            'email': 'hacked@test.com'
+        })
+        self.assertEqual(res_edit.status_code, 403)
+
+        # Logout other_student
+        self.client.get('/logout')
+
+        # Login as Admin
+        self.client.post('/login', data={'identifier': 'test_admin', 'password': 'admin123'})
+
+        # Admin CAN view student's profile
+        res_admin_view = self.client.get(f'/profile?user_id={self.student_id}')
+        self.assertEqual(res_admin_view.status_code, 200)
+        self.assertIn('Student Profile', res_admin_view.get_data(as_text=True))
+
+        # Admin CAN edit student's profile
+        res_admin_edit = self.client.post(f'/profile?user_id={self.student_id}', data={
+            'full_name': 'Admin Verified Student',
+            'username': 'test_student',
+            'email': 'student@test.com'
+        }, follow_redirects=True)
+        self.assertEqual(res_admin_edit.status_code, 200)
+
+        with self.app.app_context():
+            u = db.session.get(User, self.student_id)
+            self.assertEqual(u.profile.full_name, 'Admin Verified Student')
+
+    def test_profile_preferences_used_in_greeting_and_ai_chat(self):
+        """Test Phase 5: Dashboard greeting uses student full_name; AI chat passes preferred_language"""
+        with self.app.app_context():
+            u = db.session.get(User, self.student_id)
+            prof = u.get_or_create_profile()
+            prof.full_name = 'Aditi Sharma'
+            prof.preferred_language = 'Hinglish'
+            db.session.commit()
+
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+
+        # 1. Dashboard greeting test
+        res_dash = self.client.get('/dashboard')
+        self.assertEqual(res_dash.status_code, 200)
+        html = res_dash.get_data(as_text=True)
+        self.assertIn('Aditi Sharma', html)
+        self.assertTrue('Good morning' in html or 'Good afternoon' in html or 'Good evening' in html)
+
+        # 2. AI chat language preference test
+        with patch('ai_service.ai_service.chat_study_assistant') as mock_ai:
+            mock_ai.return_value = {
+                'reply': 'Yeh topic bahut aasan hai!',
+                'provider': 'mock',
+                'model': 'mock-model'
+            }
+            res_chat = self.client.post('/api/ai/chat', json={
+                'message': 'Explain binary search trees'
+            })
+            self.assertEqual(res_chat.status_code, 200)
+            mock_ai.assert_called_once()
+            call_kwargs = mock_ai.call_args[1]
+            # Context passed to AI must contain student's preferred language
+            selected_ctx = call_kwargs.get('selected_context', {})
+            self.assertEqual(selected_ctx.get('preferred_language'), 'Hinglish')
+
+    def test_roadmap_defaults_from_profile(self):
+        """Test Phase 5: Roadmap generator uses student's target exam and daily study hours from profile"""
+        with self.app.app_context():
+            u = db.session.get(User, self.student_id)
+            prof = u.get_or_create_profile()
+            prof.daily_study_hours = 3.5
+            prof.target_exam = 'Semester Finals'
+            db.session.commit()
+
+        self.client.post('/login', data={'identifier': 'test_student', 'password': 'pass123'})
+
+        # GET /roadmap: Check input default and placeholder
+        res_roadmap = self.client.get('/roadmap')
+        self.assertEqual(res_roadmap.status_code, 200)
+        html = res_roadmap.get_data(as_text=True)
+        self.assertIn('value="3.5"', html)
+        self.assertIn('Semester Finals Prep Roadmap', html)
+
+        # POST /roadmap/generate without daily_hours specified: defaults to 3.5
+        exam_date_val = (date.today() + timedelta(days=20)).isoformat()
+        res_gen = self.client.post('/roadmap/generate', data={
+            'subject_id': self.subject_id,
+            'exam_date': exam_date_val
+            # daily_hours omitted intentionally
+        }, follow_redirects=True)
+        self.assertEqual(res_gen.status_code, 200)
+
+        with self.app.app_context():
+            plan = RoadmapPlan.query.filter_by(subject_id=self.subject_id).first()
+            self.assertIsNotNone(plan)
+            self.assertEqual(plan.daily_study_hours, 3.5)
+
+    def test_cleanup_verified_demo_accounts(self):
+        """Test Phase 1: Explicit safe demo account cleanup leaves legitimate accounts untouched"""
+        with self.app.app_context():
+            # Create verified demo accounts
+            demo_stud = User(username='demo_student', email='student@edumate.local', role='student')
+            demo_stud.set_password('demo123')
+            demo_adm = User(username='demo_admin', email='admin@edumate.local', role='admin')
+            demo_adm.set_password('demo123')
+
+            # Create legitimate user with similar name
+            legit = User(username='demo_fan', email='demo_fan@gmail.com', role='student')
+            legit.set_password('pass123')
+
+            db.session.add_all([demo_stud, demo_adm, legit])
+            db.session.commit()
+
+            # Execute safe cleanup
+            result = cleanup_verified_demo_accounts()
+            self.assertEqual(result['count'], 2)
+            deleted_usernames = [d['username'] for d in result['deleted']]
+            self.assertIn('demo_student', deleted_usernames)
+            self.assertIn('demo_admin', deleted_usernames)
+
+            # Verified demo users must be deleted
+            self.assertIsNone(User.query.filter_by(username='demo_student').first())
+            self.assertIsNone(User.query.filter_by(username='demo_admin').first())
+
+            # Legitimate users must be completely untouched
+            self.assertIsNotNone(User.query.filter_by(username='demo_fan').first())
+            self.assertIsNotNone(db.session.get(User, self.student_id))
+            self.assertIsNotNone(db.session.get(User, self.admin_id))
+
+        # Test admin route for demo cleanup (when no demo accounts remain)
+        self.client.post('/login', data={'identifier': 'test_admin', 'password': 'admin123'})
+        res = self.client.post('/admin/system/cleanup-demo-accounts', follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('No demo accounts found', res.get_data(as_text=True))
+
 
 if __name__ == '__main__':
     unittest.main()
+
+

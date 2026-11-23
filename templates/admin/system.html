@@ -25,13 +25,20 @@
                 <h2 class="card-title">Application Configuration</h2>
             </div>
             <form method="POST" action="{{ url_for('admin.update_system_settings') }}">
-                <div class="form-group" style="padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 14px;">
-                    <label class="remember-label" style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
-                        <input type="checkbox" name="allow_registrations" value="true" {% if settings.allow_registrations %}checked{% endif %}>
-                        <span>Allow Public Student Registrations</span>
-                    </label>
-                    <span class="text-muted-sm" style="display: block; margin-left: 24px;">
-                        When unchecked, the public /register page rejects new submissions. Administrators can still create users manually.
+                <div class="form-group" style="padding: 14px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 16px; background: {% if settings.allow_registrations %}#f0fdf4{% else %}#fef2f2{% endif %};">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <label class="remember-label" style="font-weight: 700; font-size: 0.9375rem; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" name="allow_registrations" value="true" {% if settings.allow_registrations %}checked{% endif %} style="width: 18px; height: 18px; cursor: pointer;">
+                            <span>Public Student Registration</span>
+                        </label>
+                        {% if settings.allow_registrations %}
+                        <span class="status-badge status-completed" style="font-size: 11px; padding: 4px 10px;">ON &bull; Registrations Open</span>
+                        {% else %}
+                        <span class="status-badge status-pending" style="font-size: 11px; padding: 4px 10px; background: #fee2e2; color: #dc2626;">OFF &bull; Registrations Closed</span>
+                        {% endif %}
+                    </div>
+                    <span class="text-muted-sm" style="display: block; margin-left: 26px; font-size: 0.8125rem; line-height: 1.4; color: var(--text-secondary);">
+                        When ON (checked), visitors can freely register for new student accounts at <code>/register</code>. When OFF, registration is blocked with a clear administrator notice.
                     </span>
                 </div>
 
@@ -47,6 +54,19 @@
 
                 <button type="submit" class="btn btn-primary">Save System Settings</button>
             </form>
+
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                <h4 style="font-size: 13px; font-weight: 600; color: #475569; margin: 0 0 6px 0;">Demo & Viva Accounts Maintenance</h4>
+                <p class="text-muted-sm" style="margin-bottom: 12px;">
+                    Safely removes verified seed test credentials (matching both demo username and <code>@edumate.local</code> domain). Legitimate student and administrator accounts are permanently preserved.
+                </p>
+                <form method="POST" action="{{ url_for('admin.admin_cleanup_demo_accounts') }}" onsubmit="return confirm('Clean up verified demo accounts? Legitimate user accounts and real academic records will NOT be touched.');">
+                    <button type="submit" class="btn btn-outline btn-sm" style="color: #b91c1c; border-color: #fca5a5; display: inline-flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        <span>Clean Up Verified Demo Accounts</span>
+                    </button>
+                </form>
+            </div>
         </div>
 
         <!-- Right: SQLite Database Diagnostics -->

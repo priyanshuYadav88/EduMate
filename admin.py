@@ -11,7 +11,8 @@ from auth import admin_required
 from models import (
     db, User, Subject, Topic, Task, Exam, TimetableEntry,
     RoadmapPlan, RoadmapItem, OfficialExamDirectory,
-    AuditLog, UploadedPdfDocument, SystemSetting
+    AuditLog, UploadedPdfDocument, SystemSetting, AIProviderConfig,
+    cleanup_verified_demo_accounts
 )
 from ai_service import ai_service, InvalidInputException
 
@@ -660,6 +661,7 @@ def delete_pdf_record(pdf_id):
 # PHASE 5 — System Control & Database Backups
 # ==============================================================================
 @admin_bp.route('/system')
+@admin_bp.route('/settings')
 @login_required
 @admin_required
 def system_control_view():
@@ -742,6 +744,141 @@ def admin_ai_test():
         return jsonify({'success': False, 'error': f"Unexpected system error: {str(e)}"}), 500
 
 
+# ==============================================================================
+# PHASE 6 — API Management Center (Multi-Provider AI Control)
+# ==============================================================================
+@admin_bp.route('/api-management')
+@login_required
+@admin_required
+def api_management_view():
+    """
+    Dedicated Admin API Management Center.
+    Allows independent enabling/disabling of Gemini, Groq, and Ollama,
+    priority ordering, masked API key updates, and live connection testing.
+    """
+    providers = AIProviderConfig.query.order_by(AIProviderConfig.priority.asc(), AIProviderConfig.id.asc()).all()
+
+    # Check encryption state
+    encryption_configured = bool(os.getenv('ENCRYPTION_SECRET_KEY') or os.getenv('SECRET_KEY'))
+
+    return render_template(
+        'admin/api_management.html',
+        providers=providers,
+        encryption_configured=encryption_configured,
+        ai_status=ai_service.get_provider_status()
+    )
+
+
+@admin_bp.route('/api-management/save/<provider_id>', methods=['POST'])
+@login_required
+@admin_required
+def save_provider_config(provider_id):
+    """
+    Saves configuration for a specific AI provider.
+    - Preserves existing API keys if form submission leaves key blank or masked.
+    - Encrypts updated API keys at rest.
+    - Supports multiple enabled providers simultaneously.
+    - Immediately synchronizes running ai_service state.
+    """
+    provider = AIProviderConfig.query.filter_by(provider_id=provider_id.strip().lower()).first()
+    if not provider:
+        abort(404)
+
+    is_enabled = request.form.get('is_enabled') in ('true', '1', 'on')
+    is_primary = request.form.get('is_primary') in ('true', '1', 'on')
+    priority = request.form.get('priority', type=int) or provider.priority
+    model_name = request.form.get('model_name', '').strip()
+    api_base_url = request.form.get('api_base_url', '').strip()
+    timeout_sec = request.form.get('timeout_sec', type=float) or provider.timeout_sec
+    new_api_key = request.form.get('api_key', '').strip()
+
+    if not model_name:
+        flash(f"Model name for {provider.display_name} cannot be empty.", 'danger')
+        return redirect(url_for('admin.api_management_view'))
+
+    # Update basic fields
+    provider.is_enabled = is_enabled
+    provider.priority = max(1, min(10, priority))
+    provider.model_name = model_name
+    provider.timeout_sec = max(2.0, min(120.0, timeout_sec))
+
+    if api_base_url:
+        provider.api_base_url = api_base_url.rstrip('/')
+
+    # Update Primary status: if marked primary, set priority to 1 and adjust other primaries
+    if is_primary:
+        provider.is_primary = True
+        provider.priority = 1
+        other_primaries = AIProviderConfig.query.filter(AIProviderConfig.id != provider.id).all()
+        for op in other_primaries:
+            op.is_primary = False
+    else:
+        provider.is_primary = False
+
+    # Secure key replacement: Do not overwrite with empty or masked string
+    if new_api_key and not new_api_key.startswith('••') and not new_api_key.startswith('****'):
+        provider.set_api_key(new_api_key)
+
+    db.session.commit()
+
+    # Immediately synchronize the running AI service in-memory state
+    ai_service.sync_from_db()
+
+    log_admin_action(
+        action='API_CONFIG_UPDATE',
+        target_type='ai_provider',
+        target_id=provider.provider_id,
+        details=f"Updated config for {provider.display_name}. Enabled: {is_enabled}, Model: {model_name}, Priority: {provider.priority}"
+    )
+
+    if request.is_json:
+        return jsonify({'success': True, 'provider': provider.to_safe_dict()})
+
+    flash(f"Configuration for {provider.display_name} saved successfully.", 'success')
+    return redirect(url_for('admin.api_management_view'))
+
+
+@admin_bp.route('/api-management/test/<provider_id>', methods=['POST'])
+@login_required
+@admin_required
+def test_provider_endpoint(provider_id):
+    """
+    Targeted connection test for a specific provider.
+    Updates provider's last_status, last_tested_at, and last_test_message in database.
+    """
+    provider = AIProviderConfig.query.filter_by(provider_id=provider_id.strip().lower()).first()
+    if not provider:
+        return jsonify({'success': False, 'message': f"Provider '{provider_id}' not found."}), 404
+
+    # Run connection test
+    res = ai_service.test_provider_connection(
+        provider_id=provider.provider_id,
+        custom_key=provider.get_api_key(),
+        custom_model=provider.model_name,
+        custom_url=provider.api_base_url,
+        custom_timeout=provider.timeout_sec
+    )
+
+    provider.last_status = 'active' if res.get('success') else 'error'
+    provider.last_tested_at = datetime.now(timezone.utc)
+    provider.last_test_message = res.get('message', '')
+    db.session.commit()
+
+    log_admin_action(
+        action='API_CONNECTION_TEST',
+        target_type='ai_provider',
+        target_id=provider.provider_id,
+        details=f"Test {res.get('status', 'complete')}: {res.get('message', '')}"
+    )
+
+    return jsonify({
+        'success': res.get('success', False),
+        'status': provider.last_status,
+        'message': res.get('message', ''),
+        'last_tested_at': provider.last_tested_at.strftime('%d %b %Y, %H:%M:%S')
+    })
+
+
 @admin_bp.route('/system/settings/update', methods=['POST'])
 @login_required
 @admin_required
@@ -759,6 +896,24 @@ def update_system_settings():
     )
 
     flash('System settings updated successfully.', 'success')
+    return redirect(url_for('admin.system_control_view'))
+
+
+@admin_bp.route('/system/cleanup-demo-accounts', methods=['POST'])
+@login_required
+@admin_required
+def admin_cleanup_demo_accounts():
+    res = cleanup_verified_demo_accounts()
+    count = res.get('count', 0)
+    log_admin_action(
+        action='CLEANUP_DEMO_ACCOUNTS',
+        target_type='system',
+        details=f"Cleaned up {count} verified demo accounts."
+    )
+    if count > 0:
+        flash(f"Successfully cleaned up {count} verified demo account(s). Real student and admin records are untouched.", "success")
+    else:
+        flash("No demo accounts found. Database contains only genuine accounts.", "info")
     return redirect(url_for('admin.system_control_view'))
 
 

@@ -1,9 +1,21 @@
+import os
+import base64
+import hashlib
 from datetime import datetime, date, timezone
+from typing import Optional, Dict, Any
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy.orm import validates
+from cryptography.fernet import Fernet
 
 db = SQLAlchemy()
+
+def get_encryption_cipher(secret_key: Optional[str] = None) -> Fernet:
+    """Derives a deterministic 32-byte Fernet key from SECRET_KEY or ENCRYPTION_SECRET_KEY."""
+    raw = secret_key or os.getenv('ENCRYPTION_SECRET_KEY') or os.getenv('SECRET_KEY', 'edumate-btech-secret-key-2026')
+    derived = hashlib.sha256(raw.encode('utf-8')).digest()
+    return Fernet(base64.urlsafe_b64encode(derived))
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -15,6 +27,12 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), nullable=False, default='student')  # 'student' or 'admin'
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    @validates('role')
+    def validate_role(self, key, role):
+        if not role or role not in ('student', 'admin'):
+            raise ValueError(f"Invalid user role '{role}'. Permitted roles: 'student', 'admin'.")
+        return role
 
     subjects = db.relationship('Subject', backref='student', lazy=True, cascade='all, delete-orphan')
     tasks = db.relationship('Task', backref='student', lazy=True, cascade='all, delete-orphan')
@@ -34,8 +52,130 @@ class User(UserMixin, db.Model):
     def is_admin(self):
         return self.role == 'admin'
 
+    @property
+    def display_name(self) -> str:
+        if self.profile and self.profile.full_name:
+            return self.profile.full_name
+        return self.username
+
+    def get_or_create_profile(self):
+        if not self.profile:
+            prof = UserProfile(user_id=self.id)
+            db.session.add(prof)
+            db.session.commit()
+            return prof
+        return self.profile
+
     def __repr__(self):
         return f'<User {self.username} ({self.role})>'
+
+
+class UserProfile(db.Model):
+    __tablename__ = 'user_profiles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), unique=True, nullable=False, index=True)
+
+    # Personal Information
+    full_name = db.Column(db.String(100), nullable=True)
+    phone_number = db.Column(db.String(25), nullable=True)
+    avatar_url = db.Column(db.String(255), nullable=True)
+
+    # Academic Information
+    college_name = db.Column(db.String(150), nullable=True)
+    university_name = db.Column(db.String(150), nullable=True)
+    degree_course = db.Column(db.String(100), nullable=True)
+    branch_department = db.Column(db.String(100), nullable=True)
+    current_semester = db.Column(db.String(20), nullable=True)
+    academic_session = db.Column(db.String(30), nullable=True)
+    roll_number = db.Column(db.String(50), nullable=True)
+
+    # Study Preferences
+    daily_study_hours = db.Column(db.Float, default=3.0, nullable=True)
+    preferred_study_time = db.Column(db.String(30), default='Evening', nullable=True)  # 'Early Morning', 'Afternoon', 'Evening', 'Night'
+    preferred_language = db.Column(db.String(30), default='English', nullable=True)   # 'English', 'Hindi', 'Hinglish'
+    target_exam = db.Column(db.String(100), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+
+    user = db.relationship('User', backref=db.backref('profile', uselist=False, cascade='all, delete-orphan'))
+
+    @property
+    def completion_percentage(self) -> int:
+        """Calculates profile completion percentage across all sections."""
+        tracked_fields = [
+            bool(self.full_name and self.full_name.strip()),
+            bool(self.phone_number and self.phone_number.strip()),
+            bool(self.avatar_url and self.avatar_url.strip()),
+            bool(self.college_name and self.college_name.strip()),
+            bool(self.university_name and self.university_name.strip()),
+            bool(self.degree_course and self.degree_course.strip()),
+            bool(self.branch_department and self.branch_department.strip()),
+            bool(self.current_semester and self.current_semester.strip()),
+            bool(self.academic_session and self.academic_session.strip()),
+            bool(self.roll_number and self.roll_number.strip()),
+            bool(self.daily_study_hours and self.daily_study_hours > 0),
+            bool(self.preferred_study_time and self.preferred_study_time.strip()),
+            bool(self.preferred_language and self.preferred_language.strip()),
+            bool(self.target_exam and self.target_exam.strip())
+        ]
+        # Base credit of 2 for username and email from the parent User account
+        filled = sum(1 for f in tracked_fields if f) + 2
+        total = len(tracked_fields) + 2
+        return int(round((filled / total) * 100))
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'full_name': self.full_name or '',
+            'phone_number': self.phone_number or '',
+            'avatar_url': self.avatar_url or '',
+            'college_name': self.college_name or '',
+            'university_name': self.university_name or '',
+            'degree_course': self.degree_course or '',
+            'branch_department': self.branch_department or '',
+            'current_semester': self.current_semester or '',
+            'academic_session': self.academic_session or '',
+            'roll_number': self.roll_number or '',
+            'daily_study_hours': self.daily_study_hours if self.daily_study_hours is not None else 3.0,
+            'preferred_study_time': self.preferred_study_time or 'Evening',
+            'preferred_language': self.preferred_language or 'English',
+            'target_exam': self.target_exam or '',
+            'completion_percentage': self.completion_percentage
+        }
+
+    def __repr__(self):
+        return f'<UserProfile for User {self.user_id} ({self.full_name or "Unnamed"})>'
+
+
+def cleanup_verified_demo_accounts() -> Dict[str, Any]:
+    """
+    Safely identifies and removes ONLY verified seed/demo accounts.
+    Explicit safety checks:
+      1. Must match BOTH a known demo username ('demo_student', 'demo_admin')
+         AND an '@edumate.local' email domain.
+      2. Legitimate user accounts and real academic records are never touched.
+    """
+    demo_specs = [
+        ('demo_student', 'student@edumate.local'),
+        ('demo_admin', 'admin@edumate.local')
+    ]
+    deleted_accounts = []
+    for uname, uemail in demo_specs:
+        user = User.query.filter(
+            User.username == uname,
+            User.email == uemail
+        ).first()
+        if user:
+            deleted_accounts.append({'id': user.id, 'username': user.username, 'email': user.email, 'role': user.role})
+            db.session.delete(user)
+    if deleted_accounts:
+        db.session.commit()
+    return {
+        'success': True,
+        'count': len(deleted_accounts),
+        'deleted': deleted_accounts
+    }
 
 
 class Subject(db.Model):
@@ -330,3 +470,74 @@ class SystemSetting(db.Model):
 
     def __repr__(self):
         return f'<SystemSetting {self.key}={self.value}>'
+
+
+class AIProviderConfig(db.Model):
+    __tablename__ = 'ai_provider_configs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    provider_id = db.Column(db.String(30), unique=True, nullable=False, index=True)  # 'gemini', 'groq', 'ollama'
+    display_name = db.Column(db.String(60), nullable=False)  # 'Google Gemini', 'Groq API', 'Ollama (Local AI)'
+    is_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    is_primary = db.Column(db.Boolean, default=False, nullable=False)
+    priority = db.Column(db.Integer, default=1, nullable=False)  # 1 = primary, 2 = fallback 1, 3 = fallback 2
+    api_key_encrypted = db.Column(db.Text, nullable=True)  # Fernet encrypted at rest
+    api_base_url = db.Column(db.String(255), nullable=True)
+    model_name = db.Column(db.String(100), nullable=False)
+    timeout_sec = db.Column(db.Float, default=15.0, nullable=False)
+    last_status = db.Column(db.String(30), default='untested')  # 'active', 'error', 'disabled', 'untested'
+    last_tested_at = db.Column(db.DateTime, nullable=True)
+    last_test_message = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+
+    def set_api_key(self, raw_key: Optional[str], secret_key: Optional[str] = None):
+        """Encrypts and stores API key at rest using Fernet."""
+        if raw_key is None or not raw_key.strip():
+            self.api_key_encrypted = None
+            return
+        clean_key = raw_key.strip()
+        cipher = get_encryption_cipher(secret_key)
+        self.api_key_encrypted = cipher.encrypt(clean_key.encode('utf-8')).decode('utf-8')
+
+    def get_api_key(self, secret_key: Optional[str] = None) -> Optional[str]:
+        """Decrypts and returns the raw API key for outbound server-side requests."""
+        if not self.api_key_encrypted:
+            return None
+        try:
+            cipher = get_encryption_cipher(secret_key)
+            return cipher.decrypt(self.api_key_encrypted.encode('utf-8')).decode('utf-8')
+        except Exception:
+            return None
+
+    def get_masked_key(self) -> str:
+        """Returns masked API key safe for UI presentation without leaking the secret."""
+        raw_key = self.get_api_key()
+        if not raw_key:
+            return ""
+        if len(raw_key) <= 8:
+            return "••••••••"
+        return f"{raw_key[:4]}••••••••{raw_key[-4:]}"
+
+    def to_safe_dict(self) -> Dict[str, Any]:
+        """Returns safe dictionary representation for templates and API responses."""
+        return {
+            'id': self.id,
+            'provider_id': self.provider_id,
+            'display_name': self.display_name,
+            'is_enabled': self.is_enabled,
+            'is_primary': self.is_primary,
+            'priority': self.priority,
+            'has_api_key': bool(self.api_key_encrypted),
+            'masked_key': self.get_masked_key(),
+            'api_base_url': self.api_base_url,
+            'model_name': self.model_name,
+            'timeout_sec': self.timeout_sec,
+            'last_status': self.last_status,
+            'last_tested_at': self.last_tested_at.strftime('%d %b %Y, %H:%M:%S') if self.last_tested_at else None,
+            'last_test_message': self.last_test_message
+        }
+
+    def __repr__(self):
+        return f'<AIProviderConfig {self.provider_id} (enabled={self.is_enabled}, priority={self.priority})>'
+

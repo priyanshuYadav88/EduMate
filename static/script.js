@@ -189,6 +189,8 @@ async function handleAiChatSubmit(e) {
         let badgeHtml = '';
         if (data.provider === 'gemini') {
             badgeHtml += `<span class="pill-badge pill-info" style="font-size: 10px; margin-bottom: 5px; display: inline-block;">⚡ Gemini Primary</span>`;
+        } else if (data.provider === 'groq') {
+            badgeHtml += `<span class="pill-badge pill-info" style="font-size: 10px; margin-bottom: 5px; display: inline-block; background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0;">🚀 Groq</span>`;
         } else if (data.provider === 'ollama') {
             badgeHtml += `<span class="pill-badge pill-warning" style="font-size: 10px; margin-bottom: 5px; display: inline-block;">🦙 Ollama Fallback</span>`;
         }
@@ -197,13 +199,17 @@ async function handleAiChatSubmit(e) {
             badgeHtml += `<span class="pill-badge pill-success" style="font-size: 10px; margin-bottom: 5px; margin-left: 5px; display: inline-block;">📄 Source: ${escapeHtml(data.source_pages)}</span>`;
         }
 
+        const replyHtml = typeof renderMarkdown === 'function' 
+            ? renderMarkdown(data.reply) 
+            : `<p>${escapeHtml(data.reply).replace(/\n/g, '<br>')}</p>`;
+
         aiBubble.innerHTML = `
             <div class="ai-message-avatar">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
             </div>
             <div class="ai-message-content">
-                ${badgeHtml ? `<div>${badgeHtml}</div>` : ''}
-                <p>${escapeHtml(data.reply).replace(/\n/g, '<br>')}</p>
+                ${badgeHtml ? `<div style="margin-bottom: 8px;">${badgeHtml}</div>` : ''}
+                <div class="ai-markdown-content">${replyHtml}</div>
             </div>
         `;
         chatBody.appendChild(aiBubble);

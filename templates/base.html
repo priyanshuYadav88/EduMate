@@ -51,6 +51,10 @@
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                     <span>System &amp; AI Status</span>
                 </a>
+                <a href="{{ url_for('admin.api_management_view') }}" class="nav-item admin-nav-link {% if request.endpoint in ['admin.api_management_view'] %}active{% endif %}">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                    <span>API Management</span>
+                </a>
                 <a href="{{ url_for('admin.audit_logs_view') }}" class="nav-item admin-nav-link {% if request.endpoint == 'admin.audit_logs_view' %}active{% endif %}">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     <span>Audit Trail Logs</span>
@@ -119,13 +123,13 @@
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
                     <span>Progress</span>
                 </a>
-                <a href="#ai-assistant-card" class="nav-item" onclick="document.getElementById('ai-assistant-card')?.scrollIntoView({behavior:'smooth'}); return false;">
+                <a href="{{ url_for('ai_assistant_view') }}" class="nav-item {% if request.endpoint == 'ai_assistant_view' %}active{% endif %}">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
                     <span>AI Study Assistant</span>
                 </a>
-                <a href="{{ url_for('settings_view') }}" class="nav-item {% if request.endpoint == 'settings_view' %}active{% endif %}">
+                <a href="{{ url_for('profile_view') }}" class="nav-item {% if request.endpoint in ('profile_view', 'settings_view') %}active{% endif %}">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    <span>Settings</span>
+                    <span>Profile & Settings</span>
                 </a>
 
                 {% if current_user.is_authenticated and current_user.is_admin %}
@@ -162,15 +166,28 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
                     </button>
 
-                    <div class="user-profile-menu">
-                        <div class="user-avatar">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </div>
-                        <span class="user-name">{{ current_user.username if current_user.is_authenticated else 'Guest' }}</span>
+                    <div class="user-profile-menu-wrapper" style="display: flex; align-items: center; gap: 8px;">
                         {% if current_user.is_authenticated %}
+                        <a href="{{ url_for('profile_view') }}" class="user-profile-menu" title="View & Edit Profile">
+                            <div class="user-avatar" style="overflow: hidden;">
+                                {% if current_user.profile and current_user.profile.avatar_url %}
+                                <img src="{{ current_user.profile.avatar_url }}" alt="{{ current_user.display_name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                                {% else %}
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                {% endif %}
+                            </div>
+                            <span class="user-name">{{ current_user.display_name }}</span>
+                        </a>
                         <a href="{{ url_for('auth.logout') }}" class="logout-link" title="Logout">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                         </a>
+                        {% else %}
+                        <div class="user-profile-menu">
+                            <div class="user-avatar">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            </div>
+                            <span class="user-name">Guest</span>
+                        </div>
                         {% endif %}
                     </div>
                 </div>
@@ -197,7 +214,8 @@
         </div>
     </div>
 
-    <!-- Global App JS -->
+    <!-- Global App JS & Markdown Renderer -->
+    <script src="{{ url_for('static', filename='markdown_renderer.js') }}"></script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
