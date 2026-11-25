@@ -584,14 +584,14 @@ class EduMateTestCase(unittest.TestCase):
         self.assertEqual(res_reset.status_code, 200)
         self.assertIn(b'successfully reset', res_reset.data)
 
-        # 4. Safeguard: Admin cannot delete their own account
-        res_self_del = self.client.post(f'/admin/delete-user/{self.admin_id}', follow_redirects=True)
-        self.assertEqual(res_self_del.status_code, 200)
+        # 4. Safeguard: Admin cannot delete their own account (403 Forbidden)
+        res_self_del = self.client.post(f'/admin/delete-user/{self.admin_id}', follow_redirects=False)
+        self.assertEqual(res_self_del.status_code, 403)
         self.assertIn(b'cannot delete your own administrative account', res_self_del.data)
 
-        # 5. Safeguard: Cannot deactivate self
-        res_self_toggle = self.client.post(f'/admin/toggle-user/{self.admin_id}', follow_redirects=True)
-        self.assertEqual(res_self_toggle.status_code, 200)
+        # 5. Safeguard: Cannot deactivate self (403 Forbidden)
+        res_self_toggle = self.client.post(f'/admin/toggle-user/{self.admin_id}', follow_redirects=False)
+        self.assertEqual(res_self_toggle.status_code, 403)
         self.assertIn(b'cannot deactivate your own administrative account', res_self_toggle.data)
 
         # 6. Verify audit logs were generated
@@ -2573,6 +2573,188 @@ class AdminBootstrapTestCase(unittest.TestCase):
                 app = create_app({'TESTING': True, 'WTF_CSRF_ENABLED': False})
                 with app.app_context():
                     self.assertEqual(User.query.filter_by(role='admin').count(), 0)
+
+
+class AdminAuthorizationSecurityTestCase(unittest.TestCase):
+    def setUp(self):
+        self.env_patcher = patch.dict(os.environ, {
+            'ADMIN_USERNAME': 'owner_admin',
+            'ADMIN_EMAIL': 'owner@edumate.test',
+            'ADMIN_PASSWORD': 'OwnerStrongPassword!1'
+        }, clear=False)
+        self.env_patcher.start()
+        self.app = create_app({
+            'TESTING': True,
+            'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
+            'WTF_CSRF_ENABLED': False
+        })
+        self.client = self.app.test_client()
+
+        with self.app.app_context():
+            db.create_all()
+            owner = User.query.filter_by(username='owner_admin').first()
+            self.assertIsNotNone(owner)
+
+            sec_admin = User(username='second_admin', email='second@edumate.test', role='admin', is_active=True)
+            sec_admin.set_password('SecondPass!1')
+
+            third_admin = User(username='third_admin', email='third@edumate.test', role='admin', is_active=True)
+            third_admin.set_password('ThirdPass!1')
+
+            stud = User(username='stud_user', email='stud@edumate.test', role='student', is_active=True)
+            stud.set_password('StudentPass!1')
+
+            db.session.add_all([sec_admin, third_admin, stud])
+            db.session.commit()
+
+            self.owner_id = owner.id
+            self.sec_admin_id = sec_admin.id
+            self.third_admin_id = third_admin.id
+            self.student_id = stud.id
+
+    def tearDown(self):
+        self.env_patcher.stop()
+
+    def _login(self, identifier, password):
+        res = self.client.post('/login', data={'identifier': identifier, 'password': password}, follow_redirects=False)
+        self.assertEqual(res.status_code, 302)
+
+    def test_admin_cannot_delete_or_demote_or_deactivate_owner_admin(self):
+        self._login('second_admin', 'SecondPass!1')
+
+        res_del = self.client.post(f'/admin/delete-user/{self.owner_id}')
+        self.assertEqual(res_del.status_code, 403)
+
+        res_demote = self.client.post(f'/admin/users/{self.owner_id}/edit', data={
+            'username': 'owner_admin',
+            'email': 'owner@edumate.test',
+            'role': 'student',
+            'is_active': 'true'
+        })
+        self.assertEqual(res_demote.status_code, 403)
+
+        res_deact_edit = self.client.post(f'/admin/users/{self.owner_id}/edit', data={
+            'username': 'owner_admin',
+            'email': 'owner@edumate.test',
+            'role': 'admin',
+            'is_active': 'false'
+        })
+        self.assertEqual(res_deact_edit.status_code, 403)
+
+        res_toggle = self.client.post(f'/admin/toggle-user/{self.owner_id}')
+        self.assertEqual(res_toggle.status_code, 403)
+
+        res_pw = self.client.post(f'/admin/users/{self.owner_id}/reset-password', data={
+            'new_password': 'HackedPassword123'
+        })
+        self.assertEqual(res_pw.status_code, 403)
+
+        with self.app.app_context():
+            owner = db.session.get(User, self.owner_id)
+            self.assertIsNotNone(owner)
+            self.assertEqual(owner.role, 'admin')
+            self.assertTrue(owner.is_active)
+            self.assertTrue(owner.check_password('OwnerStrongPassword!1'))
+
+    def test_admin_cannot_delete_demote_or_deactivate_another_admin(self):
+        self._login('second_admin', 'SecondPass!1')
+
+        res_del = self.client.post(f'/admin/delete-user/{self.third_admin_id}')
+        self.assertEqual(res_del.status_code, 403)
+
+        res_demote = self.client.post(f'/admin/users/{self.third_admin_id}/edit', data={
+            'username': 'third_admin',
+            'email': 'third@edumate.test',
+            'role': 'student',
+            'is_active': 'true'
+        })
+        self.assertEqual(res_demote.status_code, 403)
+
+        res_toggle = self.client.post(f'/admin/toggle-user/{self.third_admin_id}')
+        self.assertEqual(res_toggle.status_code, 403)
+
+        with self.app.app_context():
+            third = db.session.get(User, self.third_admin_id)
+            self.assertIsNotNone(third)
+            self.assertEqual(third.role, 'admin')
+            self.assertTrue(third.is_active)
+
+    def test_admin_cannot_delete_or_demote_self(self):
+        self._login('second_admin', 'SecondPass!1')
+
+        res_del = self.client.post(f'/admin/delete-user/{self.sec_admin_id}')
+        self.assertEqual(res_del.status_code, 403)
+
+        res_demote = self.client.post(f'/admin/users/{self.sec_admin_id}/edit', data={
+            'username': 'second_admin',
+            'email': 'second@edumate.test',
+            'role': 'student',
+            'is_active': 'true'
+        })
+        self.assertEqual(res_demote.status_code, 403)
+
+        res_toggle = self.client.post(f'/admin/toggle-user/{self.sec_admin_id}')
+        self.assertEqual(res_toggle.status_code, 403)
+
+        with self.app.app_context():
+            sec = db.session.get(User, self.sec_admin_id)
+            self.assertIsNotNone(sec)
+            self.assertEqual(sec.role, 'admin')
+            self.assertTrue(sec.is_active)
+
+    def test_last_admin_protection(self):
+        # Remove extra admins in DB so only one admin remains
+        with self.app.app_context():
+            User.query.filter(User.id.in_([self.sec_admin_id, self.third_admin_id])).delete(synchronize_session=False)
+            db.session.commit()
+            self.assertEqual(User.query.filter_by(role='admin').count(), 1)
+
+        self._login('owner_admin', 'OwnerStrongPassword!1')
+
+        res_del = self.client.post(f'/admin/delete-user/{self.owner_id}')
+        self.assertEqual(res_del.status_code, 403)
+
+        res_demote = self.client.post(f'/admin/users/{self.owner_id}/edit', data={
+            'username': 'owner_admin',
+            'email': 'owner@edumate.test',
+            'role': 'student',
+            'is_active': 'true'
+        })
+        self.assertEqual(res_demote.status_code, 403)
+
+        res_toggle = self.client.post(f'/admin/toggle-user/{self.owner_id}')
+        self.assertEqual(res_toggle.status_code, 403)
+
+        with self.app.app_context():
+            self.assertEqual(User.query.filter_by(role='admin', is_active=True).count(), 1)
+
+    def test_student_management_actions_still_work(self):
+        self._login('second_admin', 'SecondPass!1')
+
+        # Toggle student inactive -> active
+        res_toggle = self.client.post(f'/admin/toggle-user/{self.student_id}', follow_redirects=True)
+        self.assertEqual(res_toggle.status_code, 200)
+        with self.app.app_context():
+            self.assertFalse(db.session.get(User, self.student_id).is_active)
+
+        # Edit student (reactivate and rename)
+        res_edit = self.client.post(f'/admin/users/{self.student_id}/edit', data={
+            'username': 'stud_user_updated',
+            'email': 'stud@edumate.test',
+            'role': 'student',
+            'is_active': 'true'
+        }, follow_redirects=True)
+        self.assertEqual(res_edit.status_code, 200)
+        with self.app.app_context():
+            stud = db.session.get(User, self.student_id)
+            self.assertEqual(stud.username, 'stud_user_updated')
+            self.assertTrue(stud.is_active)
+
+        # Delete student
+        res_del = self.client.post(f'/admin/delete-user/{self.student_id}', follow_redirects=True)
+        self.assertEqual(res_del.status_code, 200)
+        with self.app.app_context():
+            self.assertIsNone(db.session.get(User, self.student_id))
 
 
 if __name__ == '__main__':

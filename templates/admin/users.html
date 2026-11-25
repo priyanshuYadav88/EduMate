@@ -81,6 +81,9 @@
                                 {% if u.id == current_user.id %}
                                 <span class="pill-badge pill-info" style="margin-left: 6px;">You</span>
                                 {% endif %}
+                                {% if is_owner_admin(u) %}
+                                <span class="pill-badge pill-important" style="margin-left: 6px;">Owner</span>
+                                {% endif %}
                             </td>
                             <td>{{ u.email }}</td>
                             <td>
@@ -101,7 +104,7 @@
                                     Manage &rarr;
                                 </a>
 
-                                {% if u.id != current_user.id %}
+                                {% if u.role != 'admin' %}
                                 <form method="POST" action="{{ url_for('admin.toggle_user', user_id=u.id) }}" style="display: inline-block; margin-left: 4px;">
                                     <button type="submit" class="btn btn-outline btn-sm" title="Toggle active status">
                                         {% if u.is_active %}Deactivate{% else %}Activate{% endif %}
@@ -110,6 +113,10 @@
                                 <form method="POST" action="{{ url_for('admin.delete_user', user_id=u.id) }}" style="display: inline-block; margin-left: 4px;" onsubmit="return confirm('Are you sure you want to permanently delete user {{ u.username }} and all associated data?');">
                                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                                 </form>
+                                {% else %}
+                                <span class="text-muted-sm" style="margin-left: 8px;" title="Administrator accounts cannot be deactivated or deleted.">
+                                    {% if is_owner_admin(u) %}Protected Owner{% else %}Protected Admin{% endif %}
+                                </span>
                                 {% endif %}
                             </td>
                         </tr>

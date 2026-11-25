@@ -28,32 +28,46 @@
             <div class="card-header">
                 <h2 class="card-title">Edit Account Details</h2>
             </div>
+            {% if is_owner_admin and target_user.id != current_user.id %}
+            <p class="text-muted-sm" style="margin-bottom: 12px;">
+                This is the protected primary owner administrator account. Other administrators cannot modify, demote, deactivate, or delete it.
+            </p>
+            {% endif %}
             <form method="POST" action="{{ url_for('admin.edit_user', user_id=target_user.id) }}">
                 <div class="form-group">
                     <label for="editUsername">Username</label>
-                    <input type="text" id="editUsername" name="username" value="{{ target_user.username }}" class="form-control" required>
+                    <input type="text" id="editUsername" name="username" value="{{ target_user.username }}" class="form-control" required {% if is_owner_admin and target_user.id != current_user.id %}disabled{% endif %}>
                 </div>
                 <div class="form-group">
                     <label for="editEmail">Email Address</label>
-                    <input type="email" id="editEmail" name="email" value="{{ target_user.email }}" class="form-control" required>
+                    <input type="email" id="editEmail" name="email" value="{{ target_user.email }}" class="form-control" required {% if is_owner_admin and target_user.id != current_user.id %}disabled{% endif %}>
                 </div>
                 <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
                         <label for="editRole">System Role</label>
-                        <select id="editRole" name="role" class="form-control">
+                        {% if target_user.role == 'admin' %}
+                        <input type="hidden" name="role" value="{{ target_user.role }}">
+                        {% endif %}
+                        <select id="editRole" name="role" class="form-control" {% if target_user.role == 'admin' %}disabled{% endif %}>
                             <option value="student" {% if target_user.role == 'student' %}selected{% endif %}>Student</option>
                             <option value="admin" {% if target_user.role == 'admin' %}selected{% endif %}>Administrator</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="editActive">Account Access</label>
-                        <select id="editActive" name="is_active" class="form-control">
+                        {% if target_user.role == 'admin' %}
+                        <input type="hidden" name="is_active" value="{{ 'true' if target_user.is_active else 'false' }}">
+                        {% endif %}
+                        <select id="editActive" name="is_active" class="form-control" {% if target_user.role == 'admin' %}disabled{% endif %}>
                             <option value="true" {% if target_user.is_active %}selected{% endif %}>Active (Allowed)</option>
                             <option value="false" {% if not target_user.is_active %}selected{% endif %}>Deactivated (Blocked)</option>
                         </select>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Save Changes</button>
+                {% if target_user.role == 'admin' and not (is_owner_admin and target_user.id != current_user.id) %}
+                <p class="text-muted-sm" style="margin-top: 4px; margin-bottom: 8px;">Administrator role demotion and deactivation are disabled for security.</p>
+                {% endif %}
+                <button type="submit" class="btn btn-primary" style="margin-top: 10px;" {% if is_owner_admin and target_user.id != current_user.id %}disabled{% endif %}>Save Changes</button>
             </form>
         </div>
 
@@ -62,6 +76,9 @@
             <div class="card-header">
                 <h2 class="card-title">Security & Password Reset</h2>
             </div>
+            {% if is_owner_admin and target_user.id != current_user.id %}
+            <p class="text-muted-sm">Other administrators cannot reset the primary owner administrator's password.</p>
+            {% else %}
             <form method="POST" action="{{ url_for('admin.reset_user_password', user_id=target_user.id) }}">
                 <div class="form-group">
                     <label for="newPass">New Password</label>
@@ -70,15 +87,20 @@
                 </div>
                 <button type="submit" class="btn btn-outline" style="margin-top: 8px;">Update Password</button>
             </form>
+            {% endif %}
 
             <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border-color);">
                 <h3 style="font-size: 14px; font-weight: 600; color: var(--danger-text); margin-bottom: 8px;">Danger Zone</h3>
-                {% if target_user.id != current_user.id %}
+                {% if target_user.role != 'admin' %}
                 <form method="POST" action="{{ url_for('admin.delete_user', user_id=target_user.id) }}" onsubmit="return confirm('PERMANENT ACTION: Are you sure you want to delete user {{ target_user.username }}? All associated coursework, roadmaps and tasks will be erased.');">
                     <button type="submit" class="btn btn-danger btn-sm">Permanently Delete User Account</button>
                 </form>
+                {% elif target_user.id == current_user.id %}
+                <p class="text-muted-sm">You are logged in as this administrator. Self-deletion, self-demotion, and self-deactivation are disabled for safety.</p>
+                {% elif is_owner_admin %}
+                <p class="text-muted-sm">This is the protected primary owner administrator account. Deletion, deactivation, and demotion are disabled.</p>
                 {% else %}
-                <p class="text-muted-sm">You are logged in as this administrator. Self-deletion and self-deactivation are disabled for safety.</p>
+                <p class="text-muted-sm">Administrator accounts are protected. Other administrators cannot delete, deactivate, or demote this account.</p>
                 {% endif %}
             </div>
         </div>
