@@ -22,8 +22,12 @@ load_dotenv()
 
 def create_app(test_config=None):
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'edumate-btech-secret-key-2026')
-    db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'edumate.db')
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'edumate-btech-secret-key-2026'
+    default_db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'edumate.db')
+    db_path = os.path.abspath(os.environ.get('DATABASE_PATH') or default_db_path)
+    db_dir = os.path.dirname(db_path)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -1788,8 +1792,8 @@ def create_app(test_config=None):
 
     return app
 
+app = create_app()
+
 if __name__ == '__main__':
-    app = create_app()
-    with app.app_context():
-        db.create_all()
-    app.run(debug=True, port=5000)
+    debug_mode = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+    app.run(debug=debug_mode, port=int(os.environ.get('PORT', 5000)))

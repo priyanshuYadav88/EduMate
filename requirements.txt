@@ -12,3 +12,4 @@ requests>=2.31.0
 pymupdf>=2.0.0
 pytesseract>=0.3.10
 pillow>=10.0.0
+gunicorn>=21.2.0

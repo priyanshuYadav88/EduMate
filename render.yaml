@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: edumate
+    runtime: python
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_PATH
+        value: data/edumate.db
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: EXAM_SEARCH_API_KEY
+        sync: false
