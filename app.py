@@ -20,6 +20,41 @@ from pdf_service import validate_pdf_upload, extract_pdf_content, PDFProcessingE
 
 load_dotenv()
 
+def _bootstrap_initial_admin(app):
+    """Create the initial admin account from environment variables if no admin exists."""
+    if User.query.filter_by(role='admin').first() is not None:
+        return
+
+    admin_username = (os.environ.get('ADMIN_USERNAME') or '').strip()
+    admin_email = (os.environ.get('ADMIN_EMAIL') or '').strip()
+    admin_password = os.environ.get('ADMIN_PASSWORD') or ''
+
+    if not admin_username or not admin_email or not admin_password.strip():
+        return
+
+    existing_user = User.query.filter(
+        (User.username == admin_username) | (User.email == admin_email)
+    ).first()
+    if existing_user is not None:
+        app.logger.warning("Admin bootstrap skipped: username or email already in use.")
+        return
+
+    try:
+        admin_user = User(
+            username=admin_username,
+            email=admin_email,
+            role='admin',
+            is_active=True
+        )
+        admin_user.set_password(admin_password)
+        db.session.add(admin_user)
+        db.session.commit()
+        app.logger.info("Initial admin account bootstrapped.")
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning(f"Admin bootstrap failed: {e}")
+
+
 def create_app(test_config=None):
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or 'edumate-btech-secret-key-2026'
@@ -41,6 +76,7 @@ def create_app(test_config=None):
     with app.app_context():
         try:
             db.create_all()
+            _bootstrap_initial_admin(app)
             if not SystemSetting.query.filter_by(key='allow_registrations').first():
                 SystemSetting.set_val('allow_registrations', 'true', 'Allow Public Student Registrations')
             if not SystemSetting.query.filter_by(key='maintenance_mode').first():

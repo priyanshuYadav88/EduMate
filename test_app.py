@@ -2509,6 +2509,72 @@ class EduMateTestCase(unittest.TestCase):
         self.assertIn('No demo accounts found', res.get_data(as_text=True))
 
 
+class AdminBootstrapTestCase(unittest.TestCase):
+    def test_admin_bootstrap_creates_initial_admin_and_protects_existing(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_file = os.path.join(tmpdir, 'nested', 'prod_test.db')
+            env_initial = {
+                'DATABASE_PATH': db_file,
+                'SECRET_KEY': 'test-prod-secret-key',
+                'ADMIN_USERNAME': 'prod_admin',
+                'ADMIN_EMAIL': 'prod_admin@edumate.test',
+                'ADMIN_PASSWORD': 'StrongAdminPass!2026',
+            }
+            with patch.dict(os.environ, env_initial, clear=False):
+                app = create_app({'TESTING': True, 'WTF_CSRF_ENABLED': False})
+                self.assertEqual(app.config['SECRET_KEY'], 'test-prod-secret-key')
+                self.assertEqual(app.config['SQLALCHEMY_DATABASE_URI'], f'sqlite:///{os.path.abspath(db_file)}')
+
+                with app.app_context():
+                    admins = User.query.filter_by(role='admin').all()
+                    self.assertEqual(len(admins), 1)
+                    self.assertEqual(admins[0].username, 'prod_admin')
+                    self.assertEqual(admins[0].email, 'prod_admin@edumate.test')
+                    self.assertTrue(admins[0].check_password('StrongAdminPass!2026'))
+
+                client = app.test_client()
+                res = client.post('/login', data={
+                    'identifier': 'prod_admin',
+                    'password': 'StrongAdminPass!2026'
+                }, follow_redirects=False)
+                self.assertEqual(res.status_code, 302)
+                self.assertIn('/admin', res.location)
+
+            # Re-initializing with different ADMIN_* env vars must NOT overwrite existing admin
+            env_second = {
+                'DATABASE_PATH': db_file,
+                'SECRET_KEY': 'test-prod-secret-key',
+                'ADMIN_USERNAME': 'hijack_admin',
+                'ADMIN_EMAIL': 'hijack@edumate.test',
+                'ADMIN_PASSWORD': 'DifferentPassword!999',
+            }
+            with patch.dict(os.environ, env_second, clear=False):
+                app2 = create_app({'TESTING': True, 'WTF_CSRF_ENABLED': False})
+                with app2.app_context():
+                    admins = User.query.filter_by(role='admin').all()
+                    self.assertEqual(len(admins), 1)
+                    self.assertEqual(admins[0].username, 'prod_admin')
+                    self.assertEqual(admins[0].email, 'prod_admin@edumate.test')
+                    self.assertTrue(admins[0].check_password('StrongAdminPass!2026'))
+                    self.assertFalse(admins[0].check_password('DifferentPassword!999'))
+
+    def test_admin_bootstrap_skips_when_env_vars_missing(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_file = os.path.join(tmpdir, 'empty_admin.db')
+            env_missing = {
+                'DATABASE_PATH': db_file,
+                'ADMIN_USERNAME': '',
+                'ADMIN_EMAIL': '',
+                'ADMIN_PASSWORD': '',
+            }
+            with patch.dict(os.environ, env_missing, clear=False):
+                app = create_app({'TESTING': True, 'WTF_CSRF_ENABLED': False})
+                with app.app_context():
+                    self.assertEqual(User.query.filter_by(role='admin').count(), 0)
+
+
 if __name__ == '__main__':
     unittest.main()
 
