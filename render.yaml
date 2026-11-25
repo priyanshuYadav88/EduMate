@@ -2,6 +2,7 @@ services:
   - type: web
     name: edumate
     runtime: python
+    plan: free
     branch: main
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
