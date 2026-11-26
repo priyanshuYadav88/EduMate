@@ -25,6 +25,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='student')  # 'student' or 'admin'
+    is_owner = db.Column(db.Boolean, default=False, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 

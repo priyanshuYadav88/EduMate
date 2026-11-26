@@ -104,7 +104,8 @@
                                     Manage &rarr;
                                 </a>
 
-                                {% if u.role != 'admin' %}
+                                {% set can_manage_row = (u.role != 'admin') or (current_is_owner and u.id != current_user.id and not is_owner_admin(u)) %}
+                                {% if can_manage_row %}
                                 <form method="POST" action="{{ url_for('admin.toggle_user', user_id=u.id) }}" style="display: inline-block; margin-left: 4px;">
                                     <button type="submit" class="btn btn-outline btn-sm" title="Toggle active status">
                                         {% if u.is_active %}Deactivate{% else %}Activate{% endif %}
@@ -114,8 +115,8 @@
                                     <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                                 </form>
                                 {% else %}
-                                <span class="text-muted-sm" style="margin-left: 8px;" title="Administrator accounts cannot be deactivated or deleted.">
-                                    {% if is_owner_admin(u) %}Protected Owner{% else %}Protected Admin{% endif %}
+                                <span class="text-muted-sm" style="margin-left: 8px;" title="This administrator account is protected from modification by your current role.">
+                                    {% if u.id == current_user.id %}Current Session{% elif is_owner_admin(u) %}Protected Owner{% else %}Protected Admin{% endif %}
                                 </span>
                                 {% endif %}
                             </td>
@@ -174,7 +175,9 @@
                     <label for="newRole">System Role</label>
                     <select id="newRole" name="role" class="form-control">
                         <option value="student" selected>Student</option>
-                        <option value="admin">Administrator</option>
+                        {% if current_is_owner %}
+                        <option value="admin">Secondary Administrator</option>
+                        {% endif %}
                     </select>
                 </div>
                 <div class="form-group">

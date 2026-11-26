@@ -3,10 +3,12 @@ import re
 import io
 import json
 import uuid
+import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from flask import Flask, render_template, redirect, url_for, request, jsonify, flash, session, abort, current_app
 from flask_login import LoginManager, login_required, current_user
 from dotenv import load_dotenv
+from sqlalchemy import inspect, text
 from models import (
     db, User, Subject, Topic, Task, Exam, TimetableEntry,
     RoadmapPlan, RoadmapItem, OfficialExamDirectory, AuditLog,
@@ -20,20 +22,76 @@ from pdf_service import validate_pdf_upload, extract_pdf_content, PDFProcessingE
 
 load_dotenv()
 
+
+def _backup_sqlite_before_migration(app):
+    """Create a safe SQLite backup before applying any non-destructive schema migration."""
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if not db_uri.startswith('sqlite:///'):
+        return None
+    db_path = db_uri[len('sqlite:///'):]
+    if not db_path or db_path == ':memory:' or not os.path.exists(db_path):
+        return None
+
+    backup_dir = os.path.join(os.path.dirname(os.path.abspath(db_path)), 'backups')
+    os.makedirs(backup_dir, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')
+    backup_path = os.path.join(backup_dir, f'edumate_premigration_{timestamp}.sqlite')
+
+    src_conn = sqlite3.connect(db_path)
+    dst_conn = sqlite3.connect(backup_path)
+    try:
+        src_conn.backup(dst_conn)
+    finally:
+        dst_conn.close()
+        src_conn.close()
+    app.logger.info(f"Pre-migration SQLite backup created at {backup_path}")
+    return backup_path
+
+
+def _ensure_schema_migrations(app):
+    """Apply non-destructive schema migrations while preserving all existing rows."""
+    inspector = inspect(db.engine)
+    if 'users' not in inspector.get_table_names():
+        return
+
+    user_columns = {col['name'] for col in inspector.get_columns('users')}
+    if 'is_owner' not in user_columns:
+        _backup_sqlite_before_migration(app)
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_owner BOOLEAN NOT NULL DEFAULT 0"))
+        app.logger.info("Non-destructive migration applied: added users.is_owner column.")
+
+
 def _bootstrap_initial_admin(app):
-    """Create the initial admin account from environment variables if no admin exists."""
-    if User.query.filter_by(role='admin').first() is not None:
+    """Create or designate the Main/Owner Admin from environment variables without overwriting existing credentials."""
+    if User.query.filter_by(role='admin', is_owner=True).first() is not None:
         return
 
     admin_username = (os.environ.get('ADMIN_USERNAME') or '').strip()
-    admin_email = (os.environ.get('ADMIN_EMAIL') or '').strip()
+    admin_email = (os.environ.get('ADMIN_EMAIL') or '').strip().lower()
     admin_password = os.environ.get('ADMIN_PASSWORD') or ''
+
+    # If an existing admin matches configured ADMIN_USERNAME / ADMIN_EMAIL, designate it as owner safely
+    if admin_username or admin_email:
+        existing_admins = User.query.filter_by(role='admin').all()
+        for existing_admin in existing_admins:
+            matches_username = admin_username and existing_admin.username == admin_username
+            matches_email = admin_email and (existing_admin.email or '').strip().lower() == admin_email
+            if matches_username or matches_email:
+                existing_admin.is_owner = True
+                db.session.commit()
+                app.logger.info("Existing admin designated as Main/Owner Admin.")
+                return
+
+    # Only create an initial admin if no admin exists at all
+    if User.query.filter_by(role='admin').first() is not None:
+        return
 
     if not admin_username or not admin_email or not admin_password.strip():
         return
 
     existing_user = User.query.filter(
-        (User.username == admin_username) | (User.email == admin_email)
+        (User.username == admin_username) | (db.func.lower(User.email) == admin_email)
     ).first()
     if existing_user is not None:
         app.logger.warning("Admin bootstrap skipped: username or email already in use.")
@@ -44,12 +102,13 @@ def _bootstrap_initial_admin(app):
             username=admin_username,
             email=admin_email,
             role='admin',
+            is_owner=True,
             is_active=True
         )
         admin_user.set_password(admin_password)
         db.session.add(admin_user)
         db.session.commit()
-        app.logger.info("Initial admin account bootstrapped.")
+        app.logger.info("Initial Main/Owner Admin account bootstrapped.")
     except Exception as e:
         db.session.rollback()
         app.logger.warning(f"Admin bootstrap failed: {e}")
@@ -76,6 +135,7 @@ def create_app(test_config=None):
     with app.app_context():
         try:
             db.create_all()
+            _ensure_schema_migrations(app)
             _bootstrap_initial_admin(app)
             if not SystemSetting.query.filter_by(key='allow_registrations').first():
                 SystemSetting.set_val('allow_registrations', 'true', 'Allow Public Student Registrations')

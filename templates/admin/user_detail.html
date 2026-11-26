@@ -22,52 +22,61 @@
     </div>
 
     <!-- 2-Column Split: User Edit Form & Password Reset -->
+    {% set can_manage_target_admin = current_is_owner and target_user.id != current_user.id and not target_is_owner %}
+    {% set lock_admin_profile = (target_user.role == 'admin') and (target_user.id != current_user.id) and (not can_manage_target_admin) %}
+    {% set lock_role_and_status = (target_user.role == 'admin') and (not can_manage_target_admin) %}
     <div class="two-column-row" style="margin-bottom: 24px;">
         <!-- Left: Edit User Profile Form -->
         <div class="card">
             <div class="card-header">
                 <h2 class="card-title">Edit Account Details</h2>
             </div>
-            {% if is_owner_admin and target_user.id != current_user.id %}
+            {% if lock_admin_profile %}
             <p class="text-muted-sm" style="margin-bottom: 12px;">
-                This is the protected primary owner administrator account. Other administrators cannot modify, demote, deactivate, or delete it.
+                {% if target_is_owner %}
+                This is the protected Main/Owner Admin account. Secondary administrators cannot modify, demote, deactivate, or delete it.
+                {% else %}
+                Secondary administrators cannot modify, demote, deactivate, or delete other administrator accounts.
+                {% endif %}
             </p>
             {% endif %}
             <form method="POST" action="{{ url_for('admin.edit_user', user_id=target_user.id) }}">
                 <div class="form-group">
                     <label for="editUsername">Username</label>
-                    <input type="text" id="editUsername" name="username" value="{{ target_user.username }}" class="form-control" required {% if is_owner_admin and target_user.id != current_user.id %}disabled{% endif %}>
+                    <input type="text" id="editUsername" name="username" value="{{ target_user.username }}" class="form-control" required {% if lock_admin_profile %}disabled{% endif %}>
                 </div>
                 <div class="form-group">
                     <label for="editEmail">Email Address</label>
-                    <input type="email" id="editEmail" name="email" value="{{ target_user.email }}" class="form-control" required {% if is_owner_admin and target_user.id != current_user.id %}disabled{% endif %}>
+                    <input type="email" id="editEmail" name="email" value="{{ target_user.email }}" class="form-control" required {% if lock_admin_profile %}disabled{% endif %}>
                 </div>
                 <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
                         <label for="editRole">System Role</label>
-                        {% if target_user.role == 'admin' %}
+                        {% if lock_role_and_status %}
                         <input type="hidden" name="role" value="{{ target_user.role }}">
                         {% endif %}
-                        <select id="editRole" name="role" class="form-control" {% if target_user.role == 'admin' %}disabled{% endif %}>
+                        <select id="editRole" name="role" class="form-control" {% if lock_role_and_status %}disabled{% endif %}>
                             <option value="student" {% if target_user.role == 'student' %}selected{% endif %}>Student</option>
+                            {% if current_is_owner or target_user.role == 'admin' %}
                             <option value="admin" {% if target_user.role == 'admin' %}selected{% endif %}>Administrator</option>
+                            {% endif %}
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="editActive">Account Access</label>
-                        {% if target_user.role == 'admin' %}
+                        {% if lock_role_and_status %}
                         <input type="hidden" name="is_active" value="{{ 'true' if target_user.is_active else 'false' }}">
                         {% endif %}
-                        <select id="editActive" name="is_active" class="form-control" {% if target_user.role == 'admin' %}disabled{% endif %}>
+                        <select id="editActive" name="is_active" class="form-control" {% if lock_role_and_status %}disabled{% endif %}>
                             <option value="true" {% if target_user.is_active %}selected{% endif %}>Active (Allowed)</option>
                             <option value="false" {% if not target_user.is_active %}selected{% endif %}>Deactivated (Blocked)</option>
                         </select>
                     </div>
                 </div>
-                {% if target_user.role == 'admin' and not (is_owner_admin and target_user.id != current_user.id) %}
-                <p class="text-muted-sm" style="margin-top: 4px; margin-bottom: 8px;">Administrator role demotion and deactivation are disabled for security.</p>
+                {% if target_user.role == 'admin' and lock_role_and_status and not lock_admin_profile %}
+                <p class="text-muted-sm" style="margin-top: 4px; margin-bottom: 8px;">Your own administrator role demotion and deactivation are disabled for safety.</p>
                 {% endif %}
-                <button type="submit" class="btn btn-primary" style="margin-top: 10px;" {% if is_owner_admin and target_user.id != current_user.id %}disabled{% endif %}>Save Changes</button>
+                <button type="submit" class="btn btn-primary" style="margin-top: 10px;" {% if lock_admin_profile %}disabled{% endif %}>Save Changes</button>
             </form>
         </div>
 
@@ -76,8 +85,8 @@
             <div class="card-header">
                 <h2 class="card-title">Security & Password Reset</h2>
             </div>
-            {% if is_owner_admin and target_user.id != current_user.id %}
-            <p class="text-muted-sm">Other administrators cannot reset the primary owner administrator's password.</p>
+            {% if lock_admin_profile %}
+            <p class="text-muted-sm">Secondary administrators cannot reset another administrator's password.</p>
             {% else %}
             <form method="POST" action="{{ url_for('admin.reset_user_password', user_id=target_user.id) }}">
                 <div class="form-group">
@@ -91,16 +100,16 @@
 
             <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border-color);">
                 <h3 style="font-size: 14px; font-weight: 600; color: var(--danger-text); margin-bottom: 8px;">Danger Zone</h3>
-                {% if target_user.role != 'admin' %}
+                {% if (target_user.role != 'admin') or can_manage_target_admin %}
                 <form method="POST" action="{{ url_for('admin.delete_user', user_id=target_user.id) }}" onsubmit="return confirm('PERMANENT ACTION: Are you sure you want to delete user {{ target_user.username }}? All associated coursework, roadmaps and tasks will be erased.');">
                     <button type="submit" class="btn btn-danger btn-sm">Permanently Delete User Account</button>
                 </form>
                 {% elif target_user.id == current_user.id %}
                 <p class="text-muted-sm">You are logged in as this administrator. Self-deletion, self-demotion, and self-deactivation are disabled for safety.</p>
-                {% elif is_owner_admin %}
-                <p class="text-muted-sm">This is the protected primary owner administrator account. Deletion, deactivation, and demotion are disabled.</p>
+                {% elif target_is_owner %}
+                <p class="text-muted-sm">This is the protected Main/Owner Admin account. Deletion, deactivation, and demotion are disabled.</p>
                 {% else %}
-                <p class="text-muted-sm">Administrator accounts are protected. Other administrators cannot delete, deactivate, or demote this account.</p>
+                <p class="text-muted-sm">Secondary administrators cannot delete, deactivate, or demote other administrator accounts.</p>
                 {% endif %}
             </div>
         </div>

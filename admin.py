@@ -108,16 +108,8 @@ def dashboard():
 # PHASE 2 — User Management
 # ==============================================================================
 def is_owner_admin(user) -> bool:
-    """Return True if user is the primary/owner admin configured via ADMIN_USERNAME or ADMIN_EMAIL."""
-    if not user or user.role != 'admin':
-        return False
-    owner_username = (os.environ.get('ADMIN_USERNAME') or '').strip()
-    owner_email = (os.environ.get('ADMIN_EMAIL') or '').strip().lower()
-    if owner_username and user.username == owner_username:
-        return True
-    if owner_email and (user.email or '').strip().lower() == owner_email:
-        return True
-    return False
+    """Return True if user is the persistent Main/Owner Admin."""
+    return bool(user and user.role == 'admin' and getattr(user, 'is_owner', False))
 
 
 @admin_bp.route('/users')
@@ -156,7 +148,8 @@ def users_list():
         search=search,
         role_filter=role_filter,
         status_filter=status_filter,
-        is_owner_admin=is_owner_admin
+        is_owner_admin=is_owner_admin,
+        current_is_owner=is_owner_admin(current_user)
     )
 
 
@@ -169,6 +162,9 @@ def create_user():
     password = request.form.get('password', '')
     role = request.form.get('role', 'student').strip()
     is_active = request.form.get('is_active') == 'true'
+
+    if role == 'admin' and not is_owner_admin(current_user):
+        abort(403, description='Operation forbidden: Only the Main Admin can create administrator accounts.')
 
     if not username or not email or not password:
         flash('All required fields (Username, Email, Password) must be filled.', 'danger')
@@ -193,6 +189,7 @@ def create_user():
         username=username,
         email=email,
         role=role,
+        is_owner=False,
         is_active=is_active
     )
     new_user.set_password(password)
@@ -232,7 +229,8 @@ def user_detail(user_id):
         exams=exams,
         roadmaps=roadmaps,
         pdfs=pdfs,
-        is_owner_admin=is_owner_admin(user)
+        target_is_owner=is_owner_admin(user),
+        current_is_owner=is_owner_admin(current_user)
     )
 
 
@@ -244,34 +242,46 @@ def edit_user(user_id):
     if not user:
         abort(404)
 
-    # Protect primary owner admin from modification by other admins
-    if is_owner_admin(user) and user.id != current_user.id:
-        abort(403, description='Operation forbidden: Other administrators cannot modify the primary owner administrator account.')
+    actor_is_owner = is_owner_admin(current_user)
+    target_is_owner = is_owner_admin(user)
+
+    # Secondary admins cannot modify the Main Admin or other admins
+    if target_is_owner and user.id != current_user.id:
+        abort(403, description='Operation forbidden: Secondary administrators cannot modify the Main Admin account.')
+
+    if user.role == 'admin' and user.id != current_user.id and not actor_is_owner:
+        abort(403, description='Operation forbidden: Secondary administrators cannot modify, demote, or deactivate other administrator accounts.')
 
     username = request.form.get('username', '').strip()
     email = request.form.get('email', '').strip().lower()
     role = request.form.get('role', user.role).strip()
     is_active = request.form.get('is_active') == 'true'
 
-    # Protect any admin (self, owner, other admin, last admin) from demotion or deactivation
+    # Protect owner admin and self from demotion or deactivation
     if user.role == 'admin':
         if role != 'admin':
             if user.id == current_user.id:
                 abort(403, description='Operation forbidden: You cannot demote your own administrator account.')
-            if is_owner_admin(user):
-                abort(403, description='Operation forbidden: The primary owner administrator account cannot be demoted.')
+            if target_is_owner:
+                abort(403, description='Operation forbidden: The Main Admin account cannot be demoted.')
             if User.query.filter_by(role='admin').count() <= 1:
                 abort(403, description='Operation forbidden: You cannot demote the last remaining administrator.')
-            abort(403, description='Operation forbidden: Administrators cannot demote other administrator accounts.')
+            if not actor_is_owner:
+                abort(403, description='Operation forbidden: Only the Main Admin can demote secondary administrators.')
 
         if not is_active:
             if user.id == current_user.id:
                 abort(403, description='Operation forbidden: You cannot deactivate your own administrator account.')
-            if is_owner_admin(user):
-                abort(403, description='Operation forbidden: The primary owner administrator account cannot be deactivated.')
+            if target_is_owner:
+                abort(403, description='Operation forbidden: The Main Admin account cannot be deactivated.')
             if user.is_active and User.query.filter_by(role='admin', is_active=True).count() <= 1:
                 abort(403, description='Operation forbidden: You cannot deactivate the last active administrator.')
-            abort(403, description='Operation forbidden: Administrators cannot deactivate other administrator accounts.')
+            if not actor_is_owner:
+                abort(403, description='Operation forbidden: Only the Main Admin can deactivate secondary administrators.')
+    else:
+        # Only Main Admin can promote a student to secondary admin
+        if role == 'admin' and not actor_is_owner:
+            abort(403, description='Operation forbidden: Only the Main Admin can promote users to administrator.')
 
     if not username or not email:
         flash('Username and Email cannot be empty.', 'danger')
@@ -292,6 +302,8 @@ def edit_user(user_id):
     user.username = username
     user.email = email
     user.role = role if role in ['student', 'admin'] else 'student'
+    if user.role != 'admin':
+        user.is_owner = False
     user.is_active = is_active
     db.session.commit()
 
@@ -315,7 +327,10 @@ def reset_user_password(user_id):
         abort(404)
 
     if is_owner_admin(user) and user.id != current_user.id:
-        abort(403, description='Operation forbidden: Other administrators cannot reset the primary owner administrator password.')
+        abort(403, description='Operation forbidden: Secondary administrators cannot reset the Main Admin password.')
+
+    if user.role == 'admin' and user.id != current_user.id and not is_owner_admin(current_user):
+        abort(403, description='Operation forbidden: Secondary administrators cannot reset another administrator password.')
 
     new_password = request.form.get('new_password', '')
     if len(new_password) < 6:
@@ -348,14 +363,15 @@ def toggle_user(user_id):
     if user.id == current_user.id:
         abort(403, description='You cannot deactivate your own administrative account.')
 
-    # Protect primary owner admin and other admin accounts
+    # Protect Main Admin from any deactivation
     if is_owner_admin(user):
-        abort(403, description='Operation forbidden: The primary owner administrator account is protected and cannot be deactivated.')
+        abort(403, description='Operation forbidden: The Main Admin account is protected and cannot be deactivated.')
 
     if user.role == 'admin':
+        if not is_owner_admin(current_user):
+            abort(403, description='Operation forbidden: Secondary administrators cannot deactivate or modify the status of other administrator accounts.')
         if user.is_active and User.query.filter_by(role='admin', is_active=True).count() <= 1:
             abort(403, description='Operation forbidden: You cannot deactivate the last active administrator.')
-        abort(403, description='Operation forbidden: Administrators cannot deactivate or modify the status of other administrator accounts.')
 
     user.is_active = not user.is_active
     db.session.commit()
@@ -384,14 +400,15 @@ def delete_user(user_id):
     if user.id == current_user.id:
         abort(403, description='You cannot delete your own administrative account.')
 
-    # Protect primary owner admin and other admin accounts
+    # Protect Main Admin from deletion
     if is_owner_admin(user):
-        abort(403, description='Operation forbidden: The primary owner administrator account is protected and cannot be deleted.')
+        abort(403, description='Operation forbidden: The Main Admin account is protected and cannot be deleted.')
 
     if user.role == 'admin':
+        if not is_owner_admin(current_user):
+            abort(403, description='Operation forbidden: Secondary administrators cannot delete other administrator accounts.')
         if User.query.filter_by(role='admin').count() <= 1:
             abort(403, description='Operation forbidden: You cannot delete the last administrator.')
-        abort(403, description='Operation forbidden: Administrators cannot delete other administrator accounts.')
 
     username = user.username
     user_id_val = user.id

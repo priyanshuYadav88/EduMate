@@ -73,8 +73,8 @@ class EduMateTestCase(unittest.TestCase):
             self.student = User(username='test_student', email='student@test.com', role='student')
             self.student.set_password('pass123')
 
-            # Create test admin
-            self.admin = User(username='test_admin', email='admin@test.com', role='admin')
+            # Create test admin (Main/Owner Admin)
+            self.admin = User(username='test_admin', email='admin@test.com', role='admin', is_owner=True)
             self.admin.set_password('admin123')
 
             # Create second student for data isolation test
@@ -2755,6 +2755,150 @@ class AdminAuthorizationSecurityTestCase(unittest.TestCase):
         self.assertEqual(res_del.status_code, 200)
         with self.app.app_context():
             self.assertIsNone(db.session.get(User, self.student_id))
+
+    def test_main_admin_can_demote_and_delete_secondary_admins(self):
+        self._login('owner_admin', 'OwnerStrongPassword!1')
+
+        # Main Admin demotes second_admin -> student
+        res_demote = self.client.post(f'/admin/users/{self.sec_admin_id}/edit', data={
+            'username': 'second_admin',
+            'email': 'second@edumate.test',
+            'role': 'student',
+            'is_active': 'true'
+        }, follow_redirects=True)
+        self.assertEqual(res_demote.status_code, 200)
+        with self.app.app_context():
+            sec = db.session.get(User, self.sec_admin_id)
+            self.assertEqual(sec.role, 'student')
+            self.assertFalse(sec.is_owner)
+
+        # Main Admin deletes third_admin (secondary admin)
+        res_del = self.client.post(f'/admin/delete-user/{self.third_admin_id}', follow_redirects=True)
+        self.assertEqual(res_del.status_code, 200)
+        with self.app.app_context():
+            self.assertIsNone(db.session.get(User, self.third_admin_id))
+
+    def test_main_admin_cannot_delete_or_demote_self(self):
+        self._login('owner_admin', 'OwnerStrongPassword!1')
+
+        res_del = self.client.post(f'/admin/delete-user/{self.owner_id}')
+        self.assertEqual(res_del.status_code, 403)
+
+        res_demote = self.client.post(f'/admin/users/{self.owner_id}/edit', data={
+            'username': 'owner_admin',
+            'email': 'owner@edumate.test',
+            'role': 'student',
+            'is_active': 'true'
+        })
+        self.assertEqual(res_demote.status_code, 403)
+
+        res_toggle = self.client.post(f'/admin/toggle-user/{self.owner_id}')
+        self.assertEqual(res_toggle.status_code, 403)
+
+        with self.app.app_context():
+            owner = db.session.get(User, self.owner_id)
+            self.assertIsNotNone(owner)
+            self.assertEqual(owner.role, 'admin')
+            self.assertTrue(owner.is_owner)
+            self.assertTrue(owner.is_active)
+
+    def test_secondary_admin_cannot_promote_student_or_create_admin(self):
+        self._login('second_admin', 'SecondPass!1')
+
+        res_create = self.client.post('/admin/users/create', data={
+            'username': 'rogue_admin',
+            'email': 'rogue@edumate.test',
+            'password': 'Password123!',
+            'role': 'admin',
+            'is_active': 'true'
+        })
+        self.assertEqual(res_create.status_code, 403)
+
+        res_promote = self.client.post(f'/admin/users/{self.student_id}/edit', data={
+            'username': 'stud_user',
+            'email': 'stud@edumate.test',
+            'role': 'admin',
+            'is_active': 'true'
+        })
+        self.assertEqual(res_promote.status_code, 403)
+
+        with self.app.app_context():
+            self.assertIsNone(User.query.filter_by(username='rogue_admin').first())
+            self.assertEqual(db.session.get(User, self.student_id).role, 'student')
+
+
+class DataPreservationAndMigrationTestCase(unittest.TestCase):
+    def test_existing_records_survive_non_destructive_migration_and_restarts(self):
+        import sqlite3
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_file = os.path.join(tmpdir, 'legacy_edumate.db')
+            # Simulate a pre-existing SQLite database without the is_owner column
+            conn = sqlite3.connect(db_file)
+            conn.execute("""
+                CREATE TABLE users (
+                    id INTEGER PRIMARY KEY,
+                    username VARCHAR(64) NOT NULL UNIQUE,
+                    email VARCHAR(120) NOT NULL UNIQUE,
+                    password_hash VARCHAR(256) NOT NULL,
+                    role VARCHAR(20) NOT NULL,
+                    is_active BOOLEAN NOT NULL,
+                    created_at DATETIME NOT NULL
+                )
+            """)
+            from werkzeug.security import generate_password_hash
+            conn.execute(
+                "INSERT INTO users (id, username, email, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (1, 'main_owner', 'main@edumate.test', generate_password_hash('KeepThisPass!1'), 'admin', 1, '2026-01-01 00:00:00')
+            )
+            conn.execute(
+                "INSERT INTO users (id, username, email, password_hash, role, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (2, 'existing_student', 'student1@edumate.test', generate_password_hash('StudPass!1'), 'student', 1, '2026-01-02 00:00:00')
+            )
+            conn.commit()
+            conn.close()
+
+            env = {
+                'DATABASE_PATH': db_file,
+                'SECRET_KEY': 'migration-test-secret',
+                'ADMIN_USERNAME': 'main_owner',
+                'ADMIN_EMAIL': 'main@edumate.test',
+                'ADMIN_PASSWORD': 'ShouldNotOverwritePassword!999',
+            }
+            with patch.dict(os.environ, env, clear=False):
+                app1 = create_app({'TESTING': True, 'WTF_CSRF_ENABLED': False})
+                with app1.app_context():
+                    # Pre-migration backup must have been created
+                    backups_dir = os.path.join(tmpdir, 'backups')
+                    self.assertTrue(os.path.isdir(backups_dir))
+                    backup_files = [f for f in os.listdir(backups_dir) if f.startswith('edumate_premigration_')]
+                    self.assertGreaterEqual(len(backup_files), 1)
+
+                    # Existing users and passwords must be preserved; owner designated without reset
+                    owner = User.query.filter_by(username='main_owner').first()
+                    stud = User.query.filter_by(username='existing_student').first()
+                    self.assertIsNotNone(owner)
+                    self.assertIsNotNone(stud)
+                    self.assertTrue(owner.is_owner)
+                    self.assertTrue(owner.check_password('KeepThisPass!1'))
+                    self.assertFalse(owner.check_password('ShouldNotOverwritePassword!999'))
+                    self.assertTrue(stud.check_password('StudPass!1'))
+
+                    # Add student subject & task records and simulate a second deployment/restart
+                    subj = Subject(user_id=stud.id, name='Operating Systems', code='CS301', color='#10B981')
+                    db.session.add(subj)
+                    db.session.commit()
+                    task = Task(user_id=stud.id, subject_id=subj.id, title='Revise Deadlocks', due_date=date.today())
+                    db.session.add(task)
+                    db.session.commit()
+
+                # Simulated second deployment / Gunicorn restart
+                app2 = create_app({'TESTING': True, 'WTF_CSRF_ENABLED': False})
+                with app2.app_context():
+                    self.assertEqual(User.query.count(), 2)
+                    self.assertEqual(Subject.query.filter_by(code='CS301').count(), 1)
+                    self.assertEqual(Task.query.filter_by(title='Revise Deadlocks').count(), 1)
 
 
 if __name__ == '__main__':
